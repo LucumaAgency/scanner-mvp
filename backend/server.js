@@ -11,7 +11,19 @@ const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json({ limit: "32kb" }));
 
-app.get("/api/health", (_req, res) => res.json({ ok: true }));
+app.get("/api/health", (_req, res) =>
+  res.json({
+    ok: true,
+    mongoConnected: app.locals.mongoConnected,
+    mongoError: app.locals.mongoError,
+    nodeVersion: process.version,
+    env: {
+      mongoUriSet: Boolean(process.env.MONGO_URI),
+      mongoDb: process.env.MONGO_DB || "(default)",
+      port: process.env.PORT || "(default 3000)",
+    },
+  })
+);
 
 app.get("/api/distritos", async (_req, res) => {
   try {
@@ -67,12 +79,20 @@ function validate({ district, propertyType, area, bedrooms, priceUsd }) {
   return errs;
 }
 
+app.locals.mongoConnected = false;
+app.locals.mongoError = null;
+
 (async () => {
   try {
     await connect();
-    app.listen(PORT, () => console.log(`Valuador escuchando en :${PORT}`));
+    app.locals.mongoConnected = true;
+    console.log("Mongo conectado OK");
   } catch (e) {
-    console.error("Fallo conectando a Mongo:", e);
-    process.exit(1);
+    app.locals.mongoError = e?.message || String(e);
+    console.error("WARNING: Mongo no conectado al arrancar:", e?.message);
+    console.error(e?.stack);
+    // No process.exit — dejamos el server vivo para que /api/health responda
+    // y /api/distritos devuelva el mensaje real en JSON
   }
+  app.listen(PORT, () => console.log(`Valuador escuchando en :${PORT}`));
 })();
