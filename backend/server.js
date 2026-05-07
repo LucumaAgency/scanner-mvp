@@ -16,10 +16,11 @@ app.get("/api/health", (_req, res) => res.json({ ok: true }));
 app.get("/api/distritos", async (_req, res) => {
   try {
     const districts = await listDistricts();
-    res.json({ districts });
+    res.json({ districts, count: districts.length });
   } catch (e) {
-    console.error("[/api/distritos]", e);
-    res.status(500).json({ error: "internal" });
+    console.error("[/api/distritos] ERROR:", e?.message);
+    console.error(e?.stack);
+    res.status(500).json({ error: "internal", message: e?.message });
   }
 });
 

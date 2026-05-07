@@ -92,12 +92,14 @@ export async function valuar({ district, propertyType, area, bedrooms, priceUsd 
 
 export async function listDistricts() {
   const col = getListings();
-  const districts = await col.distinct("address.district", {
+  const raw = await col.distinct("address.district", {
     operation: "venta",
     active: true,
-    "address.district": { $ne: null },
   });
-  return districts.filter((d) => d && d.trim()).sort();
+  return raw
+    .filter((d) => typeof d === "string" && d.trim().length > 0)
+    .map((d) => d.trim())
+    .sort((a, b) => a.localeCompare(b, "es"));
 }
 
 function round(n, decimals = 2) {
