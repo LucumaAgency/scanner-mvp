@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Plesk lo ejecuta como "Additional deployment actions" después de cada git pull.
 # El build del frontend ya viene hecho desde GitHub Actions (frontend/dist está commiteado).
-# Acá solo instalamos las deps del backend en producción y reiniciamos Passenger.
+# Acá solo instalamos las deps del root (express, mongodb, dotenv) y reiniciamos Passenger.
 set -euo pipefail
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
@@ -39,10 +39,10 @@ export PATH="$NODE_BIN_DIR:$PATH"
 echo "==> Node: $(node --version)  npm: $(npm --version)"
 
 # ──────────────────────────────────────────────────────────────
-# Backend: install prod deps
+# Install deps al root (express, mongodb, dotenv)
 # ──────────────────────────────────────────────────────────────
-echo "==> Installing backend deps (production only)"
-( cd backend && npm install --omit=dev --no-audit --no-fund )
+echo "==> Installing root deps (production only)"
+npm install --omit=dev --no-audit --no-fund
 
 # ──────────────────────────────────────────────────────────────
 # Verificar que el frontend ya viene buildeado
@@ -50,7 +50,6 @@ echo "==> Installing backend deps (production only)"
 if [ ! -f frontend/dist/index.html ]; then
   echo "==> WARNING: frontend/dist/index.html no existe."
   echo "==> El build de GitHub Actions probablemente no terminó todavía o falló."
-  echo "==> Revisá la pestaña Actions del repo."
 fi
 
 # ──────────────────────────────────────────────────────────────
