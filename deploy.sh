@@ -2,19 +2,49 @@
 # Ejecutado por Plesk como "Additional deployment actions" después de cada git pull.
 set -euo pipefail
 
-# Plesk corre las acciones de deploy con PATH reducido — forzamos uno completo.
-# Si tu Plesk tiene Node 18 o 22, cambiá el "20" por la versión correspondiente.
-export PATH="/opt/plesk/node/20/bin:/opt/plesk/node/18/bin:/opt/plesk/node/22/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
+# Plesk corre con PATH reducido — forzamos los básicos así dirname/find/etc resuelven.
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
 
-# cd al dir del script sin depender de `dirname` (que tampoco está en el PATH inicial)
+# cd al dir del script sin depender de `dirname`
 SCRIPT_DIR="${BASH_SOURCE[0]%/*}"
 [ "$SCRIPT_DIR" = "${BASH_SOURCE[0]}" ] && SCRIPT_DIR="."
 cd "$SCRIPT_DIR"
-
 echo "==> CWD=$(pwd)"
-echo "==> node $(node --version)"
-echo "==> npm $(npm --version)"
 
+# ──────────────────────────────────────────────────────────────
+# Localizar node automáticamente
+# ──────────────────────────────────────────────────────────────
+NODE_BIN_DIR=""
+for d in \
+  /opt/plesk/node/*/bin \
+  /usr/local/nodejs/bin \
+  /usr/local/bin \
+  /usr/bin \
+  /root/.nvm/versions/node/*/bin \
+  ~/.nvm/versions/node/*/bin
+do
+  # ojo: el glob puede expandirse a una ruta sin archivos (ej. /opt/plesk/node/*/bin si no existe)
+  if [ -d "$d" ] && [ -x "$d/node" ]; then
+    NODE_BIN_DIR="$d"
+    break
+  fi
+done
+
+if [ -z "$NODE_BIN_DIR" ]; then
+  echo "==> FATAL: no encontré 'node' en rutas conocidas. Buscando en el filesystem..."
+  find / -name node -type f -executable 2>/dev/null | head -20 || true
+  echo "==> Copia esa(s) ruta(s) al chat para ajustar el script."
+  exit 1
+fi
+
+export PATH="$NODE_BIN_DIR:$PATH"
+echo "==> Node encontrado en: $NODE_BIN_DIR"
+echo "==> node $(node --version)"
+echo "==> npm  $(npm --version)"
+
+# ──────────────────────────────────────────────────────────────
+# Build & deploy
+# ──────────────────────────────────────────────────────────────
 echo "==> Installing backend deps (production only)"
 ( cd backend && npm install --omit=dev --no-audit --no-fund )
 
