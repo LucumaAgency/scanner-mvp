@@ -4,15 +4,13 @@ Landing simple con un formulario que lee la base de propiedades scrapeadas (Mong
 
 - **Backend**: Node 20 + Express + driver oficial de MongoDB
 - **Frontend**: React 18 + Vite + Tailwind
-- **Deploy**: GitHub Actions → Plesk (Node.js + Phusion Passenger)
+- **Deploy**: Plesk Git pull (webhook) + `deploy.sh` corre el build y reinicia Passenger
 
 ```
 valuador-app/
 ├── backend/         Express server, lógica de valuación, sirve también /dist
 ├── frontend/        Vite + React + Tailwind (form + tarjeta de resultado)
-├── .github/
-│   └── workflows/
-│       └── deploy.yml   Build + rsync + restart
+├── deploy.sh        Lo ejecuta Plesk después de cada pull
 └── README.md
 ```
 
@@ -115,67 +113,38 @@ En MongoDB Atlas → Network Access → agregar la IP del servidor Plesk. Si la 
 
 ---
 
-## Setup de GitHub Actions
+## Setup de Git en Plesk (deploy automático)
 
-### 1. Crear repo y subir
+Plesk pulla el repo directo de GitHub y ejecuta `deploy.sh` después de cada pull. No se necesitan workflows ni secrets de GitHub.
 
-```bash
-cd valuador-app
-git init
-git add .
-git commit -m "initial commit"
-git branch -M main
-git remote add origin git@github.com:TU_USUARIO/valuador-app.git
-git push -u origin main
-```
+### 1. Plesk → tu dominio → Git → Add Repository
 
-### 2. Generar SSH key dedicada para deploys
+- **Remote Git hosting**: GitHub
+- **Repository URL**: `git@github.com:LucumaAgency/scanner-mvp.git`
+- **Server path**: el mismo *Application Root* del Node app (ej: `/httpdocs`)
+- **Branch**: `main`
 
-En tu máquina:
+Plesk genera una **deploy key**. Copiarla y agregarla en:
+GitHub → Settings del repo → **Deploy keys** → Add deploy key → pegar → "Allow write access" *desactivado* (solo lectura, suficiente).
 
-```bash
-ssh-keygen -t ed25519 -C "github-actions-valuador" -f ~/.ssh/valuador_deploy -N ""
-```
+### 2. Configurar el deploy automático
 
-Esto genera dos archivos:
-- `~/.ssh/valuador_deploy` (privado — va al secret de GitHub)
-- `~/.ssh/valuador_deploy.pub` (público — va al servidor)
+En la misma pantalla de Plesk Git:
 
-Subir la clave pública al usuario de Plesk:
+- **Automatic deployment**: ON
+- **Deployment mode**: "Pull mode" (Plesk hace el `git pull`)
+- **Webhook URL**: Plesk muestra una URL — copiarla y pegarla en GitHub → Settings del repo → **Webhooks** → Add webhook (Content type: `application/json`, eventos: solo `push`)
+- **Additional deployment actions** (textarea): pegar:
 
 ```bash
-ssh-copy-id -i ~/.ssh/valuador_deploy.pub TU_USUARIO_PLESK@TU_IP
+bash deploy.sh
 ```
 
-(O pegarla manualmente en `~/.ssh/authorized_keys` del usuario de Plesk).
+Eso es todo. Cada `git push` a `main` dispara: webhook → Plesk pulla → corre `deploy.sh` → instala deps → builda frontend → reinicia Passenger.
 
-Probar:
+### 3. Primer deploy
 
-```bash
-ssh -i ~/.ssh/valuador_deploy TU_USUARIO_PLESK@TU_IP "echo OK"
-```
-
-### 3. Agregar secrets en GitHub
-
-Repo → Settings → Secrets and variables → Actions → New repository secret. Crear los 4:
-
-| Secret           | Valor                                                              |
-|------------------|--------------------------------------------------------------------|
-| `PLESK_HOST`     | IP o hostname del servidor (`123.45.67.89` o `tudominio.com`)      |
-| `PLESK_USER`     | Usuario SSH de Plesk del dominio                                   |
-| `PLESK_PATH`     | Ruta absoluta al sitio. Ej: `/var/www/vhosts/tudominio.com/httpdocs` |
-| `PLESK_SSH_KEY`  | **Contenido completo** de `~/.ssh/valuador_deploy` (clave privada) |
-
-### 4. Primer deploy
-
-Push a `main` o disparar manualmente desde Actions → Deploy → Run workflow.
-
-El workflow:
-
-1. Instala deps de frontend, hace `vite build` → genera `frontend/dist/`
-2. Instala deps de backend en modo producción (`npm ci --omit=dev`)
-3. Rsync de todo al server (excluye `.env`, `node_modules` no usados, sources del frontend)
-4. SSH al server y `touch tmp/restart.txt` → Passenger reinicia el Node app
+En Plesk → Git → tu repo → click "Pull updates" (o pushear cualquier cambio a `main`). Verificar en "Deployment log" que `deploy.sh` corrió sin errores.
 
 ---
 
@@ -198,7 +167,12 @@ cd $PLESK_PATH/backend && npm ci --omit=dev
 Luego "Restart App" en Plesk o `touch tmp/restart.txt`.
 
 **El frontend no carga (404 en /)**
-Verificar que `frontend/dist/` existe en el server después del rsync. Si falta, el build de GH Actions falló — revisar logs.
+Verificar que `frontend/dist/` existe en el server después del pull. Si falta, `deploy.sh` falló — revisar el "Deployment log" en Plesk → Git.
 
-**Permission denied en SSH desde GH Actions**
-La clave pública no está en `~/.ssh/authorized_keys` del usuario de Plesk, o el secret `PLESK_SSH_KEY` no incluye la clave privada completa (incluye los `-----BEGIN/END-----`).
+**Webhook de GitHub no dispara el pull**
+- En GitHub → Settings → Webhooks → ver el "Recent Deliveries"; tiene que mostrar 200 OK.
+- Si la URL del webhook fue regenerada en Plesk, hay que actualizarla también en GitHub.
+- Plesk → Git → "Pull updates" funciona como fallback manual.
+
+**`deploy.sh: Permission denied`**
+Asegurate que el archivo está commiteado con bit ejecutable: `git update-index --chmod=+x deploy.sh && git commit -m "fix: deploy.sh executable" && git push`. Como alternativa, en "Additional deployment actions" usar `bash deploy.sh` (ya está así por default).
