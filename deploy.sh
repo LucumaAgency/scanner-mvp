@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Ejecutado por Plesk como "Additional deployment actions" después de cada git pull.
+# Plesk lo ejecuta como "Additional deployment actions" después de cada git pull.
+# El build del frontend ya viene hecho desde GitHub Actions (frontend/dist está commiteado).
+# Acá solo instalamos las deps del backend en producción y reiniciamos Passenger.
 set -euo pipefail
 
-# Plesk corre con PATH reducido — forzamos los básicos así dirname/find/etc resuelven.
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
 
-# cd al dir del script sin depender de `dirname`
 SCRIPT_DIR="${BASH_SOURCE[0]%/*}"
 [ "$SCRIPT_DIR" = "${BASH_SOURCE[0]}" ] && SCRIPT_DIR="."
 cd "$SCRIPT_DIR"
@@ -23,7 +23,6 @@ for d in \
   /root/.nvm/versions/node/*/bin \
   ~/.nvm/versions/node/*/bin
 do
-  # ojo: el glob puede expandirse a una ruta sin archivos (ej. /opt/plesk/node/*/bin si no existe)
   if [ -d "$d" ] && [ -x "$d/node" ]; then
     NODE_BIN_DIR="$d"
     break
@@ -31,26 +30,32 @@ do
 done
 
 if [ -z "$NODE_BIN_DIR" ]; then
-  echo "==> FATAL: no encontré 'node' en rutas conocidas. Buscando en el filesystem..."
+  echo "==> FATAL: no encontré 'node' en rutas conocidas. Buscando..."
   find / -name node -type f -executable 2>/dev/null | head -20 || true
-  echo "==> Copia esa(s) ruta(s) al chat para ajustar el script."
   exit 1
 fi
 
 export PATH="$NODE_BIN_DIR:$PATH"
-echo "==> Node encontrado en: $NODE_BIN_DIR"
-echo "==> node $(node --version)"
-echo "==> npm  $(npm --version)"
+echo "==> Node: $(node --version)  npm: $(npm --version)"
 
 # ──────────────────────────────────────────────────────────────
-# Build & deploy
+# Backend: install prod deps
 # ──────────────────────────────────────────────────────────────
 echo "==> Installing backend deps (production only)"
 ( cd backend && npm install --omit=dev --no-audit --no-fund )
 
-echo "==> Installing frontend deps + build"
-( cd frontend && npm install --no-audit --no-fund && npm run build )
+# ──────────────────────────────────────────────────────────────
+# Verificar que el frontend ya viene buildeado
+# ──────────────────────────────────────────────────────────────
+if [ ! -f frontend/dist/index.html ]; then
+  echo "==> WARNING: frontend/dist/index.html no existe."
+  echo "==> El build de GitHub Actions probablemente no terminó todavía o falló."
+  echo "==> Revisá la pestaña Actions del repo."
+fi
 
+# ──────────────────────────────────────────────────────────────
+# Reiniciar Passenger
+# ──────────────────────────────────────────────────────────────
 echo "==> Restarting Node app (Phusion Passenger)"
 mkdir -p tmp
 touch tmp/restart.txt
