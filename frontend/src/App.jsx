@@ -4,7 +4,7 @@ const PROPERTY_TYPES = [
   { value: "departamento", label: "Departamento" },
   { value: "casa", label: "Casa" },
   { value: "oficina", label: "Oficina" },
-  { value: "local", label: "Local" },
+  { value: "local", label: "Local comercial" },
   { value: "terreno", label: "Terreno" },
 ];
 
@@ -64,6 +64,8 @@ export default function App() {
     return (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
   }
 
+  const showBedrooms = !["oficina", "terreno"].includes(form.propertyType);
+
   return (
     <div className="min-h-screen flex flex-col items-center px-4 py-10">
       <main className="w-full max-w-xl">
@@ -105,7 +107,7 @@ export default function App() {
             </select>
           </Field>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className={showBedrooms ? "grid grid-cols-2 gap-4" : ""}>
             <Field label="Área (m²)">
               <input
                 required
@@ -118,17 +120,19 @@ export default function App() {
                 placeholder="80"
               />
             </Field>
-            <Field label="Dormitorios">
-              <input
-                required
-                type="number"
-                min="0"
-                max="15"
-                value={form.bedrooms}
-                onChange={update("bedrooms")}
-                className="input"
-              />
-            </Field>
+            {showBedrooms && (
+              <Field label="Dormitorios">
+                <input
+                  required
+                  type="number"
+                  min="0"
+                  max="15"
+                  value={form.bedrooms}
+                  onChange={update("bedrooms")}
+                  className="input"
+                />
+              </Field>
+            )}
           </div>
 
           <Field label="Precio (USD)">
