@@ -1,12 +1,27 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const PROPERTY_TYPES = [
-  { value: "departamento", label: "Departamento" },
-  { value: "casa", label: "Casa" },
-  { value: "oficina", label: "Oficina" },
-  { value: "local", label: "Local comercial" },
-  { value: "terreno", label: "Terreno" },
+  { value: "departamento", label: "Departamento", hasBedrooms: true },
+  { value: "casa", label: "Casa", hasBedrooms: true },
+  { value: "oficina", label: "Oficina", hasBedrooms: false },
+  { value: "local", label: "Local comercial", hasBedrooms: false },
+  { value: "terreno", label: "Terreno", hasBedrooms: false },
+  { value: "cochera", label: "Cochera", hasBedrooms: false },
+  { value: "deposito", label: "Depósito", hasBedrooms: false },
+  { value: "habitacion", label: "Habitación", hasBedrooms: false },
+  { value: "edificio", label: "Edificio", hasBedrooms: false },
+  { value: "quinta", label: "Quinta", hasBedrooms: true },
 ];
+
+const OPERATIONS = [
+  { value: "venta", label: "Comprar" },
+  { value: "alquiler", label: "Alquilar" },
+];
+
+function fmt(n) {
+  if (n == null) return "-";
+  return Number(n).toLocaleString("en-US", { maximumFractionDigits: 0 });
+}
 
 export default function App() {
   const [districts, setDistricts] = useState([]);
@@ -14,6 +29,7 @@ export default function App() {
   const [form, setForm] = useState({
     district: "",
     propertyType: "departamento",
+    operation: "venta",
     area: "",
     bedrooms: "2",
     priceUsd: "",
@@ -42,6 +58,7 @@ export default function App() {
         body: JSON.stringify({
           district: form.district,
           propertyType: form.propertyType,
+          operation: form.operation,
           area: Number(form.area),
           bedrooms: Number(form.bedrooms),
           priceUsd: Number(form.priceUsd),
@@ -64,7 +81,14 @@ export default function App() {
     return (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
   }
 
-  const showBedrooms = !["oficina", "terreno"].includes(form.propertyType);
+  const propertyTypeMeta = useMemo(
+    () => PROPERTY_TYPES.find((t) => t.value === form.propertyType),
+    [form.propertyType]
+  );
+  const showBedrooms = propertyTypeMeta?.hasBedrooms ?? false;
+  const isAlquiler = form.operation === "alquiler";
+  const priceLabel = isAlquiler ? "Renta mensual (USD)" : "Precio (USD)";
+  const pricePlaceholder = isAlquiler ? "1500" : "220000";
 
   return (
     <div className="min-h-screen flex flex-col items-center px-4 py-10">
@@ -80,6 +104,25 @@ export default function App() {
           onSubmit={onSubmit}
           className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 space-y-4"
         >
+          <Field label="Operación">
+            <div className="flex gap-2">
+              {OPERATIONS.map((op) => (
+                <button
+                  key={op.value}
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, operation: op.value }))}
+                  className={`flex-1 rounded-lg py-2 text-sm font-medium border transition ${
+                    form.operation === op.value
+                      ? "bg-slate-900 text-white border-slate-900"
+                      : "bg-white text-slate-700 border-slate-200 hover:border-slate-400"
+                  }`}
+                >
+                  {op.label}
+                </button>
+              ))}
+            </div>
+          </Field>
+
           <Field label="Distrito">
             <select
               required
@@ -89,11 +132,18 @@ export default function App() {
               disabled={loadingDistricts}
             >
               <option value="">{loadingDistricts ? "Cargando..." : "Elegí un distrito"}</option>
-              {districts.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
+              {districts.map((d) => {
+                const count =
+                  isAlquiler
+                    ? d.stats?.alquiler_count
+                    : d.stats?.venta_count;
+                return (
+                  <option key={d.slug} value={d.slug}>
+                    {d.name}
+                    {count != null ? ` · ${count} props` : ""}
+                  </option>
+                );
+              })}
             </select>
           </Field>
 
@@ -135,15 +185,15 @@ export default function App() {
             )}
           </div>
 
-          <Field label="Precio (USD)">
+          <Field label={priceLabel}>
             <input
               required
               type="number"
-              min="1000"
+              min="100"
               value={form.priceUsd}
               onChange={update("priceUsd")}
               className="input"
-              placeholder="220000"
+              placeholder={pricePlaceholder}
             />
           </Field>
 
@@ -203,12 +253,24 @@ function ResultCard({ result }) {
     );
   }
 
-  const { verdict, diff_pct, market, input, n_comps, strategy } = result;
+  const { verdict, diff_pct, market, input, n_comps, strategy, operation } = result;
 
   const verdictMeta = {
-    BAJO_MERCADO: { label: "Bajo mercado", tone: "emerald", hint: "Posible oportunidad — o aviso poco confiable." },
-    DENTRO_RANGO: { label: "Dentro del rango", tone: "slate", hint: "Precio alineado con comparables." },
-    SOBRE_MERCADO: { label: "Sobre mercado", tone: "rose", hint: "Más caro que la mayoría de comparables." },
+    BAJO_MERCADO: {
+      label: "Bajo mercado",
+      tone: "emerald",
+      hint: "Posible oportunidad — o aviso poco confiable.",
+    },
+    DENTRO_RANGO: {
+      label: "Dentro del rango",
+      tone: "slate",
+      hint: "Precio alineado con comparables.",
+    },
+    SOBRE_MERCADO: {
+      label: "Sobre mercado",
+      tone: "rose",
+      hint: "Más caro que la mayoría de comparables.",
+    },
   }[verdict];
 
   const toneMap = {
@@ -217,19 +279,29 @@ function ResultCard({ result }) {
     rose: "bg-rose-50 border-rose-200 text-rose-900",
   };
 
+  const opLabel = operation === "alquiler" ? "alquiler" : "venta";
+
   return (
     <div className="mt-6 space-y-4">
       <div className={`rounded-xl border p-5 ${toneMap[verdictMeta.tone]}`}>
         <div className="flex items-baseline justify-between">
-          <p className="text-sm font-medium uppercase tracking-wide opacity-70">Veredicto</p>
-          <p className="text-sm font-semibold">{diff_pct >= 0 ? "+" : ""}{diff_pct}% vs mediana</p>
+          <p className="text-sm font-medium uppercase tracking-wide opacity-70">
+            Veredicto · {opLabel}
+          </p>
+          <p className="text-sm font-semibold">
+            {diff_pct >= 0 ? "+" : ""}
+            {diff_pct}% vs mediana
+          </p>
         </div>
         <p className="text-xl font-semibold mt-1">{verdictMeta.label}</p>
         <p className="text-sm mt-1 opacity-80">{verdictMeta.hint}</p>
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 p-5 text-sm">
-        <p className="text-slate-500 mb-3">Tu propiedad: <span className="font-medium text-slate-900">${fmt(input.price_usd_per_m2)}/m²</span></p>
+        <p className="text-slate-500 mb-3">
+          Tu propiedad:{" "}
+          <span className="font-medium text-slate-900">${fmt(input.price_usd_per_m2)}/m²</span>
+        </p>
         <div className="grid grid-cols-3 gap-2 text-center">
           <Stat label="P25" value={`$${fmt(market.p25)}`} />
           <Stat label="Mediana" value={`$${fmt(market.p50)}`} highlight />
@@ -246,14 +318,13 @@ function ResultCard({ result }) {
 
 function Stat({ label, value, highlight }) {
   return (
-    <div className={`rounded-lg py-2 ${highlight ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-900"}`}>
+    <div
+      className={`rounded-lg py-2 ${
+        highlight ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-900"
+      }`}
+    >
       <p className="text-xs opacity-70">{label}</p>
       <p className="font-semibold">{value}</p>
     </div>
   );
-}
-
-function fmt(n) {
-  if (n == null) return "-";
-  return Number(n).toLocaleString("en-US", { maximumFractionDigits: 0 });
 }

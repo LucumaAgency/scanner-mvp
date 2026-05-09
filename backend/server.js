@@ -37,15 +37,16 @@ app.get("/api/distritos", async (_req, res) => {
 });
 
 app.post("/api/valuar", async (req, res) => {
-  const { district, propertyType, area, bedrooms, priceUsd } = req.body || {};
+  const { district, propertyType, operation, area, bedrooms, priceUsd } = req.body || {};
 
-  const errors = validate({ district, propertyType, area, bedrooms, priceUsd });
+  const errors = validate({ district, propertyType, operation, area, bedrooms, priceUsd });
   if (errors.length) return res.status(400).json({ errors });
 
   try {
     const result = await valuar({
-      district: String(district).trim(),
+      districtSlug: String(district).trim(),
       propertyType: String(propertyType).trim(),
+      operation: String(operation || "venta").trim(),
       area: Number(area),
       bedrooms: Number(bedrooms),
       priceUsd: Number(priceUsd),
@@ -65,17 +66,28 @@ app.get("*", (_req, res) => {
   });
 });
 
-function validate({ district, propertyType, area, bedrooms, priceUsd }) {
+// (#4) Tipos extendidos al set completo que detecta el scraper.
+const VALID_PROPERTY_TYPES = [
+  "departamento", "casa", "terreno", "oficina", "local",
+  "cochera", "deposito", "habitacion", "edificio", "quinta",
+];
+
+const VALID_OPERATIONS = ["venta", "alquiler"];
+
+function validate({ district, propertyType, operation, area, bedrooms, priceUsd }) {
   const errs = [];
   if (!district || typeof district !== "string") errs.push("district requerido");
-  if (!propertyType || !["departamento", "casa", "terreno", "oficina", "local"].includes(propertyType))
-    errs.push("propertyType inválido");
+  if (!propertyType || !VALID_PROPERTY_TYPES.includes(propertyType))
+    errs.push(`propertyType inválido (válidos: ${VALID_PROPERTY_TYPES.join(", ")})`);
+  if (operation != null && !VALID_OPERATIONS.includes(operation))
+    errs.push(`operation inválida (venta|alquiler)`);
   const a = Number(area);
   if (!Number.isFinite(a) || a < 10 || a > 5000) errs.push("area fuera de rango (10-5000 m²)");
   const b = Number(bedrooms);
   if (!Number.isInteger(b) || b < 0 || b > 15) errs.push("bedrooms fuera de rango (0-15)");
   const p = Number(priceUsd);
-  if (!Number.isFinite(p) || p < 1000 || p > 50_000_000) errs.push("priceUsd fuera de rango");
+  // Min bajo a 100 USD: alquileres mensuales pueden ser de USD 200-3000.
+  if (!Number.isFinite(p) || p < 100 || p > 50_000_000) errs.push("priceUsd fuera de rango (100-50M)");
   return errs;
 }
 

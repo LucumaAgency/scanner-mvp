@@ -1,10 +1,10 @@
 import { MongoClient } from "mongodb";
 
 let client;
-let listings;
+let db;
 
 export async function connect() {
-  if (listings) return listings;
+  if (db) return db;
 
   const uri = process.env.MONGO_URI;
   const dbName = process.env.MONGO_DB || "scanner_inmobiliario";
@@ -13,13 +13,18 @@ export async function connect() {
 
   client = new MongoClient(uri, { serverSelectionTimeoutMS: 8000 });
   await client.connect();
-  listings = client.db(dbName).collection("listings");
-  return listings;
+  db = client.db(dbName);
+  return db;
 }
 
 export function getListings() {
-  if (!listings) throw new Error("Mongo no conectado todavía");
-  return listings;
+  if (!db) throw new Error("Mongo no conectado todavía");
+  return db.collection("listings");
+}
+
+export function getDistricts() {
+  if (!db) throw new Error("Mongo no conectado todavía");
+  return db.collection("districts");
 }
 
 export async function close() {
