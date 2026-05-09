@@ -143,8 +143,9 @@ npm start       # backend sirve API + frontend/dist en :3000
 | Método | Path             | Descripción                               |
 |--------|------------------|-------------------------------------------|
 | GET    | `/api/health`    | Sanity check (`{"ok": true}`)             |
-| GET    | `/api/distritos` | Lista distritos con avisos activos        |
-| POST   | `/api/valuar`    | Body: `{district, propertyType, area, bedrooms, priceUsd}` |
+| GET    | `/api/distritos` | Lista distritos con stats agregadas (venta + alquiler) |
+| POST   | `/api/valuar`    | Body: `{district, propertyType, operation, area, bedrooms, priceUsd}` |
+| POST   | `/api/calcular`  | Calculadora de inversión (ratios + proyección + veredicto) — ver [docs/calculadora-inversion.md](docs/calculadora-inversion.md) |
 
 Respuesta de `POST /api/valuar`:
 
@@ -158,7 +159,8 @@ Respuesta de `POST /api/valuar`:
   "n_comps": 47,
   "n_similar": 47,
   "n_district": 312,
-  "strategy": "similares"
+  "strategy": "similares",
+  "operation": "venta"
 }
 ```
 
@@ -167,6 +169,13 @@ Respuesta de `POST /api/valuar`:
 - `"distrito_completo"`: fallback porque no había suficientes similares
 
 `verdict` puede ser: `BAJO_MERCADO`, `DENTRO_RANGO`, `SOBRE_MERCADO`.
+
+`operation` puede ser `"venta"` o `"alquiler"`. Default `"venta"` si no se envía.
+
+### `POST /api/calcular` (calculadora de inversión)
+
+Replica la lógica del Excel "Calculadora v6.0" (rentas, plusvalía, inflación, ganancia real).
+Documentación detallada — fórmulas, schemas, decisiones — en **[docs/calculadora-inversion.md](docs/calculadora-inversion.md)**.
 
 ---
 
