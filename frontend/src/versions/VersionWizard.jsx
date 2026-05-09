@@ -106,7 +106,7 @@ export default function VersionWizard() {
 
   return (
     <Layout
-      title="Calculadora de inversión · Wizard"
+      title="Calculadora de inversión · Paso a paso"
       subtitle={`Paso ${step + 1} de ${STEPS.length} — sin tecnicismos`}
     >
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
@@ -115,7 +115,7 @@ export default function VersionWizard() {
         {currentStep === "distrito" && (
           <Step
             question="¿En qué distrito está la propiedad?"
-            help="Empezamos por dónde queda. Solo mostramos distritos con ventas activas."
+            help="Empecemos por la ubicación. Solo mostramos distritos con ventas activas."
             canNext={!!data.districtSlug}
             onNext={next}
             backVisible={false}
@@ -127,7 +127,7 @@ export default function VersionWizard() {
               className="input-lg"
               disabled={loading}
             >
-              <option value="">{loading ? "Cargando..." : "— Elegí —"}</option>
+              <option value="">{loading ? "Cargando..." : "— Selecciona —"}</option>
               {visibleDistricts.map((d) => (
                 <option key={d.slug} value={d.slug}>
                   {d.name} ({d.stats.venta_count} en venta)
@@ -211,7 +211,7 @@ export default function VersionWizard() {
         {currentStep === "precio" && (
           <Step
             question="¿Cuánto cuesta hoy?"
-            help="El precio en dólares de la propiedad. Si está en S/., dividilo por el TC del día (~3.7)."
+            help="El precio en dólares de la propiedad. Si está en S/., divídelo por el TC del día (~3.7)."
             canNext={Number(data.priceUsd) >= 1000}
             onNext={next}
             onBack={back}
@@ -242,7 +242,7 @@ export default function VersionWizard() {
         {currentStep === "entrega" && (
           <Step
             question="¿Cuándo te entregan la propiedad?"
-            help="Si ya está construida, poné mes y año actuales. Si es proyecto en obra, la fecha de entrega prometida."
+            help="Si ya está construida, pon mes y año actuales. Si es proyecto en obra, la fecha de entrega prometida."
             canNext={true}
             onNext={next}
             onBack={back}
@@ -279,12 +279,12 @@ export default function VersionWizard() {
 
         {currentStep === "alquiler" && (
           <Step
-            question="¿A cuánto pensás alquilarla?"
+            question="¿A cuánto piensas alquilarla?"
             help={`En USD por m² por mes. ${
               district?.stats?.median_price_usd_per_m2_alquiler
                 ? `En ${district.name} el promedio actual es $${district.stats.median_price_usd_per_m2_alquiler.toFixed(1)}/m²/mes.`
                 : ""
-            } Si no estás seguro, dejá la sugerencia.`}
+            } Si no estás seguro, deja la sugerencia.`}
             canNext={Number(suggestedAlquiler) > 0}
             onNext={next}
             onBack={back}
@@ -314,7 +314,7 @@ export default function VersionWizard() {
 
         {currentStep === "horizonte" && (
           <Step
-            question="¿Cuántos años pensás tenerla?"
+            question="¿Cuántos años piensas tenerla?"
             help="El horizonte de tu inversión. La mayoría de inversores planea 10 años."
             canNext={true}
             onNext={calculate}
@@ -336,7 +336,7 @@ export default function VersionWizard() {
                 <span className="text-sm text-slate-500 ml-1">años</span>
               </div>
               <p className="text-center text-xs text-slate-500">
-                Te entregan en {Number(data.yearEntrega)}, vendés en {Number(data.yearEntrega) + Number(data.n) - (new Date().getFullYear() < Number(data.yearEntrega) ? 0 : 0)}
+                Te entregan en {Number(data.yearEntrega)}, vendes en {Number(data.yearEntrega) + Number(data.n) - (new Date().getFullYear() < Number(data.yearEntrega) ? 0 : 0)}
               </p>
             </div>
             {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
@@ -401,7 +401,7 @@ function ProgressBar({ step, total }) {
 function ResultWizard({ result, district, onReset }) {
   const { proyeccion, verdict, verdict_tone } = result;
   const verdictMap = {
-    GANANCIA_REAL: "🟢 Esta inversión te haría ganar plata real",
+    GANANCIA_REAL: "🟢 Esta inversión te haría ganar dinero real",
     GANANCIA_NOMINAL: "🟡 Ganarías USD pero perderías contra la inflación",
     PERDIDA_REAL: "🔴 Esta inversión perdería valor real",
   };
@@ -426,11 +426,11 @@ function ResultWizard({ result, district, onReset }) {
 
       <div className="grid grid-cols-2 gap-3">
         <BigStat
-          label="Tu plata, hoy"
+          label="Tu dinero, hoy"
           value={`$${fmt(result.input.priceUsd)}`}
         />
         <BigStat
-          label={`Tu plata en ${result.input.n} años`}
+          label={`Tu dinero en ${result.input.n} años`}
           value={`$${fmt(proyeccion.valor_total_obtenido_usd)}`}
           highlight
         />

@@ -162,7 +162,7 @@ export default function App() {
                 {loadingDistricts
                   ? "Cargando..."
                   : visibleDistricts.length
-                  ? "Elegí un distrito"
+                  ? "Elige un distrito"
                   : `Sin distritos con inventario de ${isAlquiler ? "alquiler" : "venta"}`}
               </option>
               {visibleDistricts.map((d) => {
@@ -533,7 +533,7 @@ function InvestmentCalculator({ district, priceUsd, areaM2 }) {
       <Section title="Proyecto y fechas">
         <Field
           label="Plusvalía inmediata a la entrega (USD)"
-          hint="Diferencia precio lista vs precio socio fundador. 0 si comprás al precio público."
+          hint="Diferencia precio lista vs precio socio fundador. 0 si compras al precio público."
         >
           <input
             type="number"

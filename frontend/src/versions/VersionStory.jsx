@@ -95,11 +95,11 @@ export default function VersionStory() {
   return (
     <Layout
       title="Calculadora de inversión · Historia"
-      subtitle="Completá los espacios resaltados como un cuento. Click sobre el subrayado amarillo para editar."
+      subtitle="Completa los espacios resaltados como un cuento. Haz clic sobre el subrayado amarillo para editar."
     >
       <article className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 text-lg leading-loose text-slate-800">
         <p>
-          Imaginá que comprás un{" "}
+          Imagina que compras un{" "}
           <Inline>
             <select
               value={propertyType}
@@ -158,7 +158,7 @@ export default function VersionStory() {
 
         <p className="mt-4 text-base text-slate-600">
           <span className="text-xs uppercase tracking-wide opacity-60">opcional · </span>
-          ¿Te dieron precio de socio fundador? Te ahorraste{" "}
+          ¿Te dieron precio de socio fundador? Te ahorrarías{" "}
           <Inline>
             <span className="text-slate-500">USD</span>{" "}
             <input
@@ -200,7 +200,7 @@ export default function VersionStory() {
         </p>
 
         <p className="mt-4">
-          Para entonces, vas a poder alquilarla a{" "}
+          Para entonces, podrías alquilarla a{" "}
           <Inline>
             <span className="text-slate-500">USD</span>{" "}
             <input
@@ -222,7 +222,7 @@ export default function VersionStory() {
         </p>
 
         <p className="mt-6">
-          Pensás tenerla por{" "}
+          Piensas tenerla por{" "}
           <Inline>
             <input
               type="number"
@@ -273,7 +273,7 @@ function ResultStory({ result, district, propertyType, alquilerUsd }) {
   let veredictoTexto;
   let veredictoClass;
   if (verdict === "GANANCIA_REAL") {
-    veredictoTexto = "Ganaste plata REAL — más allá de la inflación.";
+    veredictoTexto = "Ganaste dinero REAL — más allá de la inflación.";
     veredictoClass = "text-emerald-700";
   } else if (verdict === "GANANCIA_NOMINAL") {
     veredictoTexto = "Ganaste USD nominales pero perdiste poder de compra.";
@@ -308,14 +308,14 @@ function ResultStory({ result, district, propertyType, alquilerUsd }) {
       </p>
 
       <p className="mt-4">
-        Si vendés ahora y sumás todo lo cobrado, te quedás con{" "}
+        Si vendes ahora y sumas todo lo cobrado, te quedas con{" "}
         <strong className="text-slate-900">${fmt(proyeccion.valor_total_obtenido_usd)}</strong>.
         Eso es <Highlight>{proyeccion.moic}x</Highlight> lo que pusiste originalmente.
       </p>
 
       <p className="mt-4 text-base text-slate-600">
-        Pero ojo: la inflación también hizo lo suyo. Para no perder poder de compra,
-        tu plata original debería valer hoy <strong>${fmt(proyeccion.inversion_ajustada_usd)}</strong>{" "}
+        Pero atención: la inflación también hizo lo suyo. Para no perder poder de compra,
+        tu dinero original debería valer hoy <strong>${fmt(proyeccion.inversion_ajustada_usd)}</strong>{" "}
         (eso es solo mantenerse).
       </p>
 

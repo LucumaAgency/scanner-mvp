@@ -114,7 +114,7 @@ export default function VersionCards() {
   return (
     <Layout
       title="Calculadora de inversión · Tarjetas"
-      subtitle="Cada campo viene con su explicación. Pasá el cursor por (?) para más detalle."
+      subtitle="Cada campo viene con su explicación. Haz clic en (?) para más detalle."
     >
       <form onSubmit={calculate} className="space-y-4">
         {/* === SECCIÓN 1: PROPIEDAD === */}
@@ -132,7 +132,7 @@ export default function VersionCards() {
             required
             disabled={loading}
           >
-            <option value="">{loading ? "Cargando..." : "Elegí un distrito"}</option>
+            <option value="">{loading ? "Cargando..." : "Elige un distrito"}</option>
             {visibleDistricts.map((d) => (
               <option key={d.slug} value={d.slug}>
                 {d.name} ({d.stats.venta_count} en venta)
@@ -177,7 +177,7 @@ export default function VersionCards() {
           <Card
             icon="💵"
             title="Precio (USD)"
-            help="Cuánto pagás por la propiedad. Si es en S/., dividí por TC ~3.7."
+            help="Cuánto pagas por la propiedad. Si es en S/., divide por TC ~3.7."
           >
             <input
               type="number"
@@ -194,7 +194,7 @@ export default function VersionCards() {
         <Card
           icon="🎁"
           title="Plusvalía inmediata (USD)"
-          help="¿Te dieron precio de socio fundador? La diferencia con el precio público es ganancia desde el día 1. Si pagaste el precio normal, dejá 0."
+          help="¿Te dieron precio de socio fundador? La diferencia con el precio público es ganancia desde el día 1. Si pagaste el precio normal, deja 0."
         >
           <input
             type="number"
@@ -209,7 +209,7 @@ export default function VersionCards() {
         <SectionHeader emoji="📅" title="Cuándo" />
 
         <div className="grid grid-cols-2 gap-3">
-          <Card icon="🛒" title="Compra" help="Cuándo pagás por la propiedad.">
+          <Card icon="🛒" title="Compra" help="Cuándo pagas por la propiedad.">
             <div className="grid grid-cols-2 gap-2">
               <select
                 value={inputs.monthCompra}
@@ -260,14 +260,14 @@ export default function VersionCards() {
           subtitle={
             district?.stats?.median_price_usd_per_m2_alquiler
               ? `Pre-llenado con valores reales de ${district.name}.`
-              : "Defaults genéricos. Ajustá si tenés mejor info."
+              : "Valores por defecto genéricos. Ajusta si tienes mejor información."
           }
         />
 
         <Card
           icon="🏠"
           title="Alquiler por m² mensual (USD)"
-          help="Cuánto cobrarías por cada m² al mes. Pesimista = lo mínimo realista, Promedio = lo típico, Optimista = lo máximo si lo decorás bien."
+          help="Cuánto cobrarías por cada m² al mes. Pesimista = lo mínimo realista, Promedio = lo típico, Optimista = lo máximo si lo decoras bien."
         >
           <ScenarioInput
             values={inputs.alquilerPorM2Mes}
@@ -291,7 +291,7 @@ export default function VersionCards() {
         <Card
           icon="🔧"
           title="Gastos operativos anuales (USD)"
-          help="Mantenimiento + impuesto predial + administración del edificio. Default: 0.6%/0.4%/0.3% del precio."
+          help="Mantenimiento + impuesto predial + administración del edificio. Por defecto: 0.6%/0.4%/0.3% del precio."
         >
           <ScenarioInput
             values={inputs.gastosOperativosUsd}
@@ -314,7 +314,7 @@ export default function VersionCards() {
             <Card
               icon="📈"
               title="Plusvalía proyectada (g)"
-              help="Cuánto crece el valor de la propiedad por año, en decimal. 0.05 = 5%. Default conservador para Lima."
+              help="Cuánto crece el valor de la propiedad por año, en decimal. 0.05 = 5%. Valor por defecto conservador para Lima."
             >
               <input
                 type="number"
@@ -329,7 +329,7 @@ export default function VersionCards() {
             <Card
               icon="📅"
               title="Horizonte (n años)"
-              help="Cuántos años pensás tenerla. La mayoría planea 10."
+              help="Cuántos años piensas tenerla. La mayoría planea 10."
             >
               <input
                 type="number"
