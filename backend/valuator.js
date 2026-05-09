@@ -138,6 +138,8 @@ export async function valuar({
 
 // (#2) Lista distritos desde la colección `districts`, no desde un distinct sobre listings.
 // Devuelve objetos {slug, name, stats} ordenados por inventario activo descendente.
+// Incluye stats tanto de venta como de alquiler — el frontend los usa para
+// pre-llenar la calculadora con sugerencias.
 export async function listDistricts() {
   const col = getDistricts();
   const docs = await col
@@ -150,7 +152,12 @@ export async function listDistricts() {
       "stats.active_listings": 1,
       "stats.venta_count": 1,
       "stats.alquiler_count": 1,
+      "stats.p25_price_usd_per_m2_venta": 1,
       "stats.median_price_usd_per_m2_venta": 1,
+      "stats.p75_price_usd_per_m2_venta": 1,
+      "stats.p25_price_usd_per_m2_alquiler": 1,
+      "stats.median_price_usd_per_m2_alquiler": 1,
+      "stats.p75_price_usd_per_m2_alquiler": 1,
     })
     .sort({ "stats.active_listings": -1 })
     .toArray();

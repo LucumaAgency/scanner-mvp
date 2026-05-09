@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect } from "./db.js";
 import { valuar, listDistricts } from "./valuator.js";
+import { calcularInversion, validateCalculatorInput } from "./calculator.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -54,6 +55,22 @@ app.post("/api/valuar", async (req, res) => {
     res.json(result);
   } catch (e) {
     console.error("[/api/valuar]", e);
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+// Calculadora de inversión inmobiliaria — replica la lógica del Excel "Calculadora v6.0".
+// Input: ver validateCalculatorInput en calculator.js.
+// Output: ratios (3 escenarios) + proyección + veredicto.
+app.post("/api/calcular", (req, res) => {
+  const errors = validateCalculatorInput(req.body || {});
+  if (errors.length) return res.status(400).json({ errors });
+
+  try {
+    const result = calcularInversion(req.body);
+    res.json(result);
+  } catch (e) {
+    console.error("[/api/calcular]", e);
     res.status(500).json({ error: "internal" });
   }
 });
