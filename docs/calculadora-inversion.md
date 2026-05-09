@@ -9,14 +9,15 @@ Vive **debajo del valuador** existente: cuando el usuario valua un precio en ope
 ## Tabla de contenido
 
 1. [Arquitectura](#arquitectura)
-2. [Endpoints API](#endpoints-api)
-3. [Fórmulas implementadas](#fórmulas-implementadas)
-4. [Inputs, defaults y pre-llenado inteligente](#inputs-defaults-y-pre-llenado-inteligente)
-5. [Veredictos](#veredictos)
-6. [Dependencia con el scraper urbania](#dependencia-con-el-scraper-urbania)
-7. [Cómo extender](#cómo-extender)
-8. [Limitaciones conocidas](#limitaciones-conocidas)
-9. [Glosario financiero](#glosario-financiero)
+2. [Versiones de UX](#versiones-de-ux)
+3. [Endpoints API](#endpoints-api)
+4. [Fórmulas implementadas](#fórmulas-implementadas)
+5. [Inputs, defaults y pre-llenado inteligente](#inputs-defaults-y-pre-llenado-inteligente)
+6. [Veredictos](#veredictos)
+7. [Dependencia con el scraper urbania](#dependencia-con-el-scraper-urbania)
+8. [Cómo extender](#cómo-extender)
+9. [Limitaciones conocidas](#limitaciones-conocidas)
+10. [Glosario financiero](#glosario-financiero)
 
 ---
 
@@ -58,6 +59,54 @@ Vive **debajo del valuador** existente: cuando el usuario valua un precio en ope
 **Decisión de diseño clave**: el cálculo es **puro** (no toca Mongo). `calculator.js` recibe un objeto JS, devuelve otro objeto JS. Esto lo hace testeable aisladamente y permite agregar variantes (ej. simulación Monte Carlo, year-by-year) sin tocar el server.
 
 El único acceso a base es para **pre-llenar** los inputs del form usando datos reales del distrito (vía `/api/distritos`).
+
+---
+
+## Versiones de UX
+
+La calculadora tiene **4 presentaciones** del mismo backend, accesibles por rutas distintas. Útil para A/B testing y para comparar enfoques pedagógicos según el perfil del usuario.
+
+| Ruta | Nombre | Filosofía | Para quién |
+|---|---|---|---|
+| `/` | Original | Calculadora detrás de un botón "Analizar como inversión" — primero se valua el precio, después se profundiza | Usuario que entra a evaluar precio y opcionalmente quiere análisis financiero |
+| `/version1` | **Wizard** | Una pregunta por pantalla, sin jerga financiera. Captura solo lo esencial (distrito, tipo, área, precio, entrega, alquiler, horizonte). Vacancia/gastos/π quedan ocultos con defaults | Persona que se pierde con forms largos. Conversion-friendly |
+| `/version2` | **Tarjetas explicadas** | Form completo en una pantalla. Cada campo es una tarjeta con título + tooltip "(?)" que explica para qué sirve. Sección "Avanzado" colapsable | Quien quiere control total pero necesita entender los términos |
+| `/version3` | **Historia interactiva** | Mad Libs financiero. El usuario lee un párrafo y completa los blancos amarillos. Resultado contado como una narrativa ("Año 2036, tu departamento ya no vale...") | Persona muy no-técnica, sin paciencia para forms tradicionales |
+
+**Las 4 versiones consumen el mismo `POST /api/calcular`**. La diferencia está 100% en el cliente.
+
+### Código compartido
+
+```
+frontend/src/
+├── App.jsx                       ← Versión original
+├── lib/
+│   ├── calculatorApi.js          ← Hook useDistricts, fetch /api/calcular,
+│   │                                 buildDefaults() — usado por las 3 versiones
+│   └── Layout.jsx                ← Header + footer con navegación cruzada
+└── versions/
+    ├── VersionWizard.jsx         ← /version1
+    ├── VersionCards.jsx          ← /version2
+    └── VersionStory.jsx          ← /version3
+```
+
+### Decisiones de diseño por versión
+
+**Wizard (`/version1`)** — pierde precisión a cambio de simplicidad. Solo pregunta el alquiler "promedio"; pesimista/optimista se derivan automáticamente como `±15%`. Vacancia y gastos quedan en defaults. Ideal cuando la prioridad es que el user complete el flujo.
+
+**Cards (`/version2`)** — captura todos los inputs del Excel. Cada campo tiene una explicación que se muestra al click "(?)" — no satura la vista pero está disponible. La sección "Supuestos avanzados" (g, n, π) está cerrada por defecto porque la mayoría de users debería usar los defaults.
+
+**Story (`/version3`)** — único enfoque sin tablas. Tanto el form como el resultado son texto fluido. Inputs con borde amarillo subrayado para invitar a editar. El resultado se cuenta en presente futuro: "tu propiedad valdrá X". Trade-off: más difícil escanear datos rápido, pero más memorable.
+
+### Cómo agregar una versión nueva
+
+1. Crear `frontend/src/versions/VersionTuPropuesta.jsx`
+2. Importar `useDistricts`, `buildDefaults`, `calcular`, `Layout` desde `lib/`
+3. Agregar la ruta en `frontend/src/main.jsx`:
+   ```jsx
+   <Route path="/version4" element={<VersionTuPropuesta />} />
+   ```
+4. Agregar al array `VERSIONS` en `lib/Layout.jsx` para que aparezca en el footer cruzado.
 
 ---
 
