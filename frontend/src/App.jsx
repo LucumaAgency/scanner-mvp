@@ -81,6 +81,23 @@ export default function App() {
     return (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
   }
 
+  // Cambiar operación puede invalidar el distrito seleccionado
+  // (si el distrito no tiene inventario para la nueva operación, lo reseteamos).
+  function setOperation(value) {
+    setForm((f) => {
+      const current = districts.find((d) => d.slug === f.district);
+      const count =
+        value === "alquiler"
+          ? current?.stats?.alquiler_count
+          : current?.stats?.venta_count;
+      return {
+        ...f,
+        operation: value,
+        district: count > 0 ? f.district : "",
+      };
+    });
+  }
+
   const propertyTypeMeta = useMemo(
     () => PROPERTY_TYPES.find((t) => t.value === form.propertyType),
     [form.propertyType]
@@ -89,6 +106,12 @@ export default function App() {
   const isAlquiler = form.operation === "alquiler";
   const priceLabel = isAlquiler ? "Renta mensual (USD)" : "Precio (USD)";
   const pricePlaceholder = isAlquiler ? "1500" : "220000";
+
+  // Filtra distritos según la operación: solo los que tienen inventario para esa operación.
+  const visibleDistricts = districts.filter((d) => {
+    const count = isAlquiler ? d.stats?.alquiler_count : d.stats?.venta_count;
+    return count > 0;
+  });
 
   return (
     <div className="min-h-screen flex flex-col items-center px-4 py-10">
@@ -110,7 +133,7 @@ export default function App() {
                 <button
                   key={op.value}
                   type="button"
-                  onClick={() => setForm((f) => ({ ...f, operation: op.value }))}
+                  onClick={() => setOperation(op.value)}
                   className={`flex-1 rounded-lg py-2 text-sm font-medium border transition ${
                     form.operation === op.value
                       ? "bg-slate-900 text-white border-slate-900"
@@ -131,16 +154,20 @@ export default function App() {
               className="input"
               disabled={loadingDistricts}
             >
-              <option value="">{loadingDistricts ? "Cargando..." : "Elegí un distrito"}</option>
-              {districts.map((d) => {
-                const count =
-                  isAlquiler
-                    ? d.stats?.alquiler_count
-                    : d.stats?.venta_count;
+              <option value="">
+                {loadingDistricts
+                  ? "Cargando..."
+                  : visibleDistricts.length
+                  ? "Elegí un distrito"
+                  : `Sin distritos con inventario de ${isAlquiler ? "alquiler" : "venta"}`}
+              </option>
+              {visibleDistricts.map((d) => {
+                const count = isAlquiler
+                  ? d.stats?.alquiler_count
+                  : d.stats?.venta_count;
                 return (
                   <option key={d.slug} value={d.slug}>
-                    {d.name}
-                    {count != null ? ` · ${count} props` : ""}
+                    {d.name} · {count} {count === 1 ? "propiedad" : "propiedades"}
                   </option>
                 );
               })}
