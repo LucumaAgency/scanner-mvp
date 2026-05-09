@@ -45,6 +45,15 @@ export async function valuar({
 
   const col = getListings();
 
+  // Rangos plausibles de USD/m² según operación.
+  // Venta: precio total → ~100-20.000 USD/m².
+  // Alquiler: renta mensual → ~1-200 USD/m²/mes (típico Lima 5-50).
+  // Sin esto, el filtro de venta excluiría todos los alquileres por ser numéricamente bajos.
+  const priceRange =
+    op === "alquiler"
+      ? { $ne: null, $gt: 1, $lt: 200 }
+      : { $ne: null, $gt: 100, $lt: 20000 };
+
   const baseFilter = {
     operation: op,
     property_type: propertyType,
@@ -52,8 +61,7 @@ export async function valuar({
     active: true,
     // (#1) Solo comparables con ubicación verificada por polígono.
     location_quality: { $in: ["ok", "neighborhood"] },
-    // Filtro adicional: descartar outliers absurdos del precio/m².
-    price_usd_per_m2: { $ne: null, $gt: 100, $lt: 20000 },
+    price_usd_per_m2: priceRange,
   };
 
   const docs = await col.find(baseFilter).project(PROJECTION).toArray();
