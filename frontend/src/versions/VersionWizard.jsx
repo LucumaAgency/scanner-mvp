@@ -7,7 +7,7 @@
  * Defaults ocultos: vacancia, gastos, plusvalía inmediata, g, π — el user no los ve.
  */
 import { useMemo, useState } from "react";
-import Layout from "../lib/Layout.jsx";
+import { Link, useLocation } from "react-router-dom";
 import {
   PROPERTY_TYPES,
   MONTHS,
@@ -16,6 +16,18 @@ import {
   calcular,
   fmt,
 } from "../lib/calculatorApi.js";
+
+// Imagen de background del hero. Reemplazar por una foto urbana de Lima
+// (Miraflores, Barranco, vista al mar, skyline) cuando se tenga el asset.
+// Hoy: foto pública de Unsplash (depto moderno).
+const HERO_BG = "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1920&q=80";
+
+const VERSIONS = [
+  { path: "/", label: "Original" },
+  { path: "/version1", label: "v1 · Wizard" },
+  { path: "/version2", label: "v2 · Tarjetas" },
+  { path: "/version3", label: "v3 · Historia" },
+];
 
 const STEPS = [
   "distrito",
@@ -105,11 +117,17 @@ export default function VersionWizard() {
   const currentStep = STEPS[step];
 
   return (
-    <Layout
-      title="Calculadora de inversión · Paso a paso"
-      subtitle={`Paso ${step + 1} de ${STEPS.length} — sin tecnicismos`}
-    >
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+    <HeroLayout>
+      <div className="bg-white rounded-2xl shadow-2xl p-8">
+        <div className="mb-6">
+          <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">
+            Calculadora de inversión · Paso a paso
+          </p>
+          <p className="text-sm text-slate-600 mt-1">
+            Paso {step + 1} de {STEPS.length} — sin tecnicismos
+          </p>
+        </div>
+
         <ProgressBar step={step} total={STEPS.length} />
 
         {currentStep === "distrito" && (
@@ -347,7 +365,108 @@ export default function VersionWizard() {
           <ResultWizard result={result} district={district} onReset={() => { setStep(0); setResult(null); }} />
         )}
       </div>
-    </Layout>
+    </HeroLayout>
+  );
+}
+
+function HeroLayout({ children }) {
+  const location = useLocation();
+  return (
+    <div className="min-h-screen relative">
+      {/* Background hero — imagen + overlay oscuro para contraste con texto */}
+      <div className="absolute inset-0 -z-10">
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: `url('${HERO_BG}')` }}
+        />
+        {/* Gradient oscuro encima para legibilidad del texto blanco */}
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-900/85 via-slate-900/60 to-slate-900/40" />
+      </div>
+
+      {/* Contenido — 2 columnas en desktop, apiladas en mobile */}
+      <div className="min-h-screen flex flex-col">
+        <div className="flex-1 flex items-center px-4 sm:px-8 lg:px-16 py-12">
+          <div className="max-w-7xl mx-auto w-full grid lg:grid-cols-2 gap-8 lg:gap-16 items-center">
+            {/* Columna izquierda — copy de marketing */}
+            <div className="text-white space-y-6 max-w-xl">
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-light leading-tight">
+                Sabe qué precio justo pagar por tu próxima propiedad
+              </h1>
+              <p className="text-lg text-white/80 leading-relaxed">
+                La diferencia entre invertir bien o mal son los datos. Comparamos
+                tu propiedad contra miles de avisos reales en Lima y proyectamos
+                tu retorno real a 10 años.
+              </p>
+              <ul className="space-y-3 text-base text-white/90">
+                <li className="flex items-start gap-3">
+                  <span className="text-emerald-400 mt-0.5">✓</span>
+                  <span>Datos en vivo del mercado peruano</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-emerald-400 mt-0.5">✓</span>
+                  <span>Polígonos reales de cada distrito de Lima y Callao</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-emerald-400 mt-0.5">✓</span>
+                  <span>Proyección de plusvalía, rentas e inflación</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-emerald-400 mt-0.5">✓</span>
+                  <span>7 preguntas simples — sin tecnicismos</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Columna derecha — el wizard */}
+            <div className="lg:pl-8">{children}</div>
+          </div>
+        </div>
+
+        {/* Footer con navegación cruzada entre versiones */}
+        <footer className="px-4 sm:px-8 lg:px-16 pb-6">
+          <div className="max-w-7xl mx-auto">
+            <p className="text-xs text-white/60 mb-2">Compará versiones de UX:</p>
+            <div className="flex flex-wrap gap-2">
+              {VERSIONS.map((v) => {
+                const active = location.pathname === v.path;
+                return (
+                  <Link
+                    key={v.path}
+                    to={v.path}
+                    className={`text-xs px-3 py-1 rounded-full border transition ${
+                      active
+                        ? "bg-white text-slate-900 border-white"
+                        : "bg-white/10 text-white/90 border-white/30 hover:bg-white/20"
+                    }`}
+                  >
+                    {v.label}
+                  </Link>
+                );
+              })}
+            </div>
+            <p className="text-[10px] text-white/40 text-center mt-4">
+              Datos de urbania.pe · solo referencial
+            </p>
+          </div>
+        </footer>
+      </div>
+
+      <style>{`
+        .input-lg {
+          width: 100%;
+          border: 1px solid rgb(203 213 225);
+          border-radius: 0.75rem;
+          padding: 0.75rem 1rem;
+          font-size: 1.125rem;
+          background: white;
+        }
+        .input-lg:focus {
+          outline: none;
+          border-color: rgb(15 23 42);
+          box-shadow: 0 0 0 3px rgb(15 23 42 / 0.08);
+        }
+      `}</style>
+    </div>
   );
 }
 
