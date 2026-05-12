@@ -1,12 +1,13 @@
 /**
- * Versión 1 — Wizard paso a paso.
- * Filosofía: una pregunta por pantalla, sin jerga financiera.
- * Para usuarios que se pierden con forms largos.
+ * Versión 1 — Wizard paso a paso, presentación tipo landing hero.
  *
- * Pantallas: distrito → tipo → tamaño → precio → entrega → alquiler estimado → años → resultado.
- * Defaults ocultos: vacancia, gastos, plusvalía inmediata, g, π — el user no los ve.
+ * Layout: hero a pantalla completa con foto de Lima como background.
+ * Columna izquierda (al fondo): título Montserrat Bold + párrafo único.
+ * Columna derecha: card del wizard en modo noche.
+ *
+ * Captura solo lo esencial — vacancia/gastos/π quedan con defaults ocultos.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   PROPERTY_TYPES,
@@ -17,10 +18,7 @@ import {
   fmt,
 } from "../lib/calculatorApi.js";
 
-// Imagen de background del hero. Reemplazar por una foto urbana de Lima
-// (Miraflores, Barranco, vista al mar, skyline) cuando se tenga el asset.
-// Hoy: foto pública de Unsplash (depto moderno).
-const HERO_BG = "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1920&q=80";
+const HERO_BG = "/background.jpg";
 
 const VERSIONS = [
   { path: "/", label: "Original" },
@@ -62,8 +60,6 @@ export default function VersionWizard() {
   const district = districts.find((d) => d.slug === data.districtSlug);
   const propertyTypeMeta = PROPERTY_TYPES.find((t) => t.value === data.propertyType);
 
-  // Cuando el user llega al paso "alquiler", pre-llenamos con la mediana del distrito
-  // si todavía no eligió un valor.
   const suggestedAlquiler = useMemo(() => {
     if (data.alquilerUsdM2Mes) return Number(data.alquilerUsdM2Mes);
     return district?.stats?.median_price_usd_per_m2_alquiler ?? 15;
@@ -87,7 +83,6 @@ export default function VersionWizard() {
     try {
       const today = new Date();
       const defaults = buildDefaults(district, Number(data.priceUsd), Number(data.areaM2));
-      // Sobreescribimos solo lo que el wizard captura. El resto queda con defaults.
       const med = Number(suggestedAlquiler);
       const payload = {
         ...defaults,
@@ -118,12 +113,12 @@ export default function VersionWizard() {
 
   return (
     <HeroLayout>
-      <div className="bg-white rounded-2xl shadow-2xl p-8">
+      <div className="bg-slate-900/95 backdrop-blur rounded-2xl shadow-2xl border border-white/10 p-8">
         <div className="mb-6">
-          <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">
-            Calculadora de inversión · Paso a paso
+          <p className="text-xs uppercase tracking-wider text-emerald-400 font-semibold">
+            Calculadora de inversión
           </p>
-          <p className="text-sm text-slate-600 mt-1">
+          <p className="text-sm text-slate-400 mt-1">
             Paso {step + 1} de {STEPS.length} — sin tecnicismos
           </p>
         </div>
@@ -133,25 +128,17 @@ export default function VersionWizard() {
         {currentStep === "distrito" && (
           <Step
             question="¿En qué distrito está la propiedad?"
-            help="Empecemos por la ubicación. Solo mostramos distritos con ventas activas."
+            help="Empecemos por la ubicación. Buscá entre los distritos con ventas activas."
             canNext={!!data.districtSlug}
             onNext={next}
             backVisible={false}
           >
-            <select
-              required
-              value={data.districtSlug}
-              onChange={(e) => set("districtSlug", e.target.value)}
-              className="input-lg"
-              disabled={loading}
-            >
-              <option value="">{loading ? "Cargando..." : "— Selecciona —"}</option>
-              {visibleDistricts.map((d) => (
-                <option key={d.slug} value={d.slug}>
-                  {d.name} ({d.stats.venta_count} en venta)
-                </option>
-              ))}
-            </select>
+            <DistrictLiveSearch
+              districts={visibleDistricts}
+              selectedSlug={data.districtSlug}
+              loading={loading}
+              onSelect={(slug) => set("districtSlug", slug)}
+            />
           </Step>
         )}
 
@@ -171,12 +158,12 @@ export default function VersionWizard() {
                   onClick={() => set("propertyType", t.value)}
                   className={`rounded-xl py-4 px-3 border-2 transition text-left ${
                     data.propertyType === t.value
-                      ? "border-slate-900 bg-slate-50"
-                      : "border-slate-200 hover:border-slate-400"
+                      ? "border-emerald-400 bg-emerald-400/10"
+                      : "border-white/15 hover:border-white/40 bg-white/5"
                   }`}
                 >
                   <div className="text-2xl">{t.emoji}</div>
-                  <div className="font-medium text-sm mt-1">{t.label}</div>
+                  <div className="font-medium text-sm mt-1 text-white">{t.label}</div>
                 </button>
               ))}
             </div>
@@ -197,28 +184,28 @@ export default function VersionWizard() {
           >
             <div className="space-y-3">
               <div>
-                <label className="text-sm text-slate-600">Área (m²)</label>
+                <label className="text-sm text-slate-400">Área (m²)</label>
                 <input
                   type="number"
                   min="10"
                   max="5000"
                   value={data.areaM2}
                   onChange={(e) => set("areaM2", e.target.value)}
-                  className="input-lg mt-1"
+                  className="input-night mt-1"
                   placeholder="80"
                   autoFocus
                 />
               </div>
               {propertyTypeMeta?.hasBedrooms && (
                 <div>
-                  <label className="text-sm text-slate-600">Dormitorios</label>
+                  <label className="text-sm text-slate-400">Dormitorios</label>
                   <input
                     type="number"
                     min="0"
                     max="15"
                     value={data.bedrooms}
                     onChange={(e) => set("bedrooms", e.target.value)}
-                    className="input-lg mt-1"
+                    className="input-night mt-1"
                   />
                 </div>
               )}
@@ -235,19 +222,19 @@ export default function VersionWizard() {
             onBack={back}
           >
             <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-lg">$</span>
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-lg">$</span>
               <input
                 type="number"
                 min="1000"
                 value={data.priceUsd}
                 onChange={(e) => set("priceUsd", e.target.value)}
-                className="input-lg pl-8"
+                className="input-night pl-8"
                 placeholder="220000"
                 autoFocus
               />
             </div>
             {Number(data.priceUsd) > 0 && Number(data.areaM2) > 0 && (
-              <p className="text-xs text-slate-500 mt-2">
+              <p className="text-xs text-slate-400 mt-2">
                 ${fmt(Number(data.priceUsd) / Number(data.areaM2))}/m² ·
                 {district?.stats?.median_price_usd_per_m2_venta && (
                   <span> mediana del distrito: ${fmt(district.stats.median_price_usd_per_m2_venta)}/m²</span>
@@ -267,28 +254,26 @@ export default function VersionWizard() {
           >
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-sm text-slate-600">Mes</label>
+                <label className="text-sm text-slate-400">Mes</label>
                 <select
                   value={data.monthEntrega}
                   onChange={(e) => set("monthEntrega", Number(e.target.value))}
-                  className="input-lg mt-1"
+                  className="input-night mt-1"
                 >
                   {MONTHS.map((m) => (
-                    <option key={m.value} value={m.value}>
-                      {m.label}
-                    </option>
+                    <option key={m.value} value={m.value}>{m.label}</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="text-sm text-slate-600">Año</label>
+                <label className="text-sm text-slate-400">Año</label>
                 <input
                   type="number"
                   min={new Date().getFullYear()}
                   max={new Date().getFullYear() + 10}
                   value={data.yearEntrega}
                   onChange={(e) => set("yearEntrega", e.target.value)}
-                  className="input-lg mt-1"
+                  className="input-night mt-1"
                 />
               </div>
             </div>
@@ -315,14 +300,14 @@ export default function VersionWizard() {
                 step="0.5"
                 value={suggestedAlquiler}
                 onChange={(e) => set("alquilerUsdM2Mes", e.target.value)}
-                className="w-full"
+                className="w-full accent-emerald-400"
               />
               <div className="text-center">
-                <span className="text-3xl font-bold text-slate-900">${suggestedAlquiler}</span>
-                <span className="text-sm text-slate-500 ml-1">/m²/mes</span>
+                <span className="text-3xl font-bold text-white">${suggestedAlquiler}</span>
+                <span className="text-sm text-slate-400 ml-1">/m²/mes</span>
               </div>
               {Number(data.areaM2) > 0 && (
-                <p className="text-center text-sm text-slate-600">
+                <p className="text-center text-sm text-slate-400">
                   ≈ ${fmt(suggestedAlquiler * Number(data.areaM2))}/mes en alquiler bruto
                 </p>
               )}
@@ -347,17 +332,17 @@ export default function VersionWizard() {
                 max="20"
                 value={data.n}
                 onChange={(e) => set("n", e.target.value)}
-                className="w-full"
+                className="w-full accent-emerald-400"
               />
               <div className="text-center">
-                <span className="text-3xl font-bold text-slate-900">{data.n}</span>
-                <span className="text-sm text-slate-500 ml-1">años</span>
+                <span className="text-3xl font-bold text-white">{data.n}</span>
+                <span className="text-sm text-slate-400 ml-1">años</span>
               </div>
               <p className="text-center text-xs text-slate-500">
-                Te entregan en {Number(data.yearEntrega)}, vendes en {Number(data.yearEntrega) + Number(data.n) - (new Date().getFullYear() < Number(data.yearEntrega) ? 0 : 0)}
+                Te entregan en {Number(data.yearEntrega)}, vendes en {Number(data.yearEntrega) + Number(data.n)}
               </p>
             </div>
-            {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
+            {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
           </Step>
         )}
 
@@ -373,59 +358,48 @@ function HeroLayout({ children }) {
   const location = useLocation();
   return (
     <div className="min-h-screen relative">
-      {/* Background hero — imagen + overlay oscuro para contraste con texto */}
+      {/* Background */}
       <div className="absolute inset-0 -z-10">
         <div
           className="absolute inset-0 bg-cover bg-center"
           style={{ backgroundImage: `url('${HERO_BG}')` }}
         />
-        {/* Gradient oscuro encima para legibilidad del texto blanco */}
-        <div className="absolute inset-0 bg-gradient-to-r from-slate-900/85 via-slate-900/60 to-slate-900/40" />
+        {/* Overlay oscuro: más oscuro a la izquierda y abajo (donde va el texto) */}
+        <div className="absolute inset-0 bg-gradient-to-tr from-black/85 via-black/55 to-black/30" />
       </div>
 
       {/* Contenido — 2 columnas en desktop, apiladas en mobile */}
       <div className="min-h-screen flex flex-col">
-        <div className="flex-1 flex items-center px-4 sm:px-8 lg:px-16 py-12">
-          <div className="max-w-7xl mx-auto w-full grid lg:grid-cols-2 gap-8 lg:gap-16 items-center">
-            {/* Columna izquierda — copy de marketing */}
-            <div className="text-white space-y-6 max-w-xl">
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-light leading-tight">
-                Sabe qué precio justo pagar por tu próxima propiedad
-              </h1>
-              <p className="text-lg text-white/80 leading-relaxed">
-                La diferencia entre invertir bien o mal son los datos. Comparamos
-                tu propiedad contra miles de avisos reales en Lima y proyectamos
-                tu retorno real a 10 años.
-              </p>
-              <ul className="space-y-3 text-base text-white/90">
-                <li className="flex items-start gap-3">
-                  <span className="text-emerald-400 mt-0.5">✓</span>
-                  <span>Datos en vivo del mercado peruano</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <span className="text-emerald-400 mt-0.5">✓</span>
-                  <span>Polígonos reales de cada distrito de Lima y Callao</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <span className="text-emerald-400 mt-0.5">✓</span>
-                  <span>Proyección de plusvalía, rentas e inflación</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <span className="text-emerald-400 mt-0.5">✓</span>
-                  <span>7 preguntas simples — sin tecnicismos</span>
-                </li>
-              </ul>
+        <div className="flex-1 px-4 sm:px-8 lg:px-16 py-12">
+          <div className="max-w-7xl mx-auto h-full grid lg:grid-cols-2 gap-8 lg:gap-16">
+            {/* Columna izquierda — copy al FONDO */}
+            <div className="flex flex-col justify-end min-h-[60vh] lg:min-h-[calc(100vh-200px)]">
+              <div className="max-w-xl text-white space-y-4">
+                <h1
+                  className="text-4xl sm:text-5xl lg:text-6xl leading-tight"
+                  style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700 }}
+                >
+                  Sabe qué precio justo pagar por tu próxima propiedad
+                </h1>
+                <p className="text-lg text-white/80 leading-relaxed">
+                  La diferencia entre invertir bien o mal son los datos. Comparamos
+                  tu propiedad contra miles de avisos reales en Lima y proyectamos
+                  tu retorno real.
+                </p>
+              </div>
             </div>
 
-            {/* Columna derecha — el wizard */}
-            <div className="lg:pl-8">{children}</div>
+            {/* Columna derecha — wizard, centrado verticalmente */}
+            <div className="flex items-center lg:pl-8">
+              <div className="w-full">{children}</div>
+            </div>
           </div>
         </div>
 
-        {/* Footer con navegación cruzada entre versiones */}
+        {/* Footer */}
         <footer className="px-4 sm:px-8 lg:px-16 pb-6">
           <div className="max-w-7xl mx-auto">
-            <p className="text-xs text-white/60 mb-2">Compará versiones de UX:</p>
+            <p className="text-xs text-white/60 mb-2">Compara versiones de UX:</p>
             <div className="flex flex-wrap gap-2">
               {VERSIONS.map((v) => {
                 const active = location.pathname === v.path;
@@ -452,20 +426,101 @@ function HeroLayout({ children }) {
       </div>
 
       <style>{`
-        .input-lg {
+        .input-night {
           width: 100%;
-          border: 1px solid rgb(203 213 225);
+          background: rgb(30 41 59);
+          border: 1px solid rgb(51 65 85);
+          color: white;
           border-radius: 0.75rem;
           padding: 0.75rem 1rem;
           font-size: 1.125rem;
-          background: white;
         }
-        .input-lg:focus {
+        .input-night::placeholder {
+          color: rgb(100 116 139);
+        }
+        .input-night:focus {
           outline: none;
-          border-color: rgb(15 23 42);
-          box-shadow: 0 0 0 3px rgb(15 23 42 / 0.08);
+          border-color: rgb(52 211 153);
+          box-shadow: 0 0 0 3px rgb(52 211 153 / 0.15);
         }
       `}</style>
+    </div>
+  );
+}
+
+function DistrictLiveSearch({ districts, selectedSlug, loading, onSelect }) {
+  const [query, setQuery] = useState("");
+
+  const selected = districts.find((d) => d.slug === selectedSlug);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const list = q
+      ? districts.filter((d) => d.name.toLowerCase().includes(q))
+      : districts;
+    return list.slice(0, 8); // Top 8 por inventario (ya vienen ordenados)
+  }, [query, districts]);
+
+  // Si ya hay seleccionado, mostrar chip + botón cambiar
+  if (selected) {
+    return (
+      <div className="bg-emerald-400/10 border border-emerald-400/30 rounded-xl px-4 py-3 flex items-center justify-between">
+        <div>
+          <p className="text-emerald-400 text-xs uppercase font-semibold tracking-wide">
+            Distrito seleccionado
+          </p>
+          <p className="text-white text-lg font-medium mt-0.5">
+            {selected.name}
+          </p>
+          <p className="text-slate-400 text-xs">
+            {selected.stats.venta_count} propiedades en venta
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => onSelect("")}
+          className="text-xs text-slate-400 hover:text-white px-3 py-1.5 rounded-lg border border-white/20"
+        >
+          Cambiar
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder={loading ? "Cargando..." : "Escribe el distrito..."}
+        disabled={loading}
+        className="input-night"
+        autoFocus
+      />
+
+      {filtered.length === 0 ? (
+        <p className="text-sm text-slate-500 px-2 py-3">
+          Sin resultados para "{query}"
+        </p>
+      ) : (
+        <ul className="max-h-64 overflow-y-auto rounded-lg border border-white/10 divide-y divide-white/5 bg-slate-800/50">
+          {filtered.map((d) => (
+            <li key={d.slug}>
+              <button
+                type="button"
+                onClick={() => onSelect(d.slug)}
+                className="w-full text-left px-4 py-3 hover:bg-white/5 transition flex items-center justify-between"
+              >
+                <span className="text-white text-sm font-medium">{d.name}</span>
+                <span className="text-slate-400 text-xs">
+                  {d.stats.venta_count} {d.stats.venta_count === 1 ? "propiedad" : "props"}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -474,8 +529,8 @@ function Step({ question, help, children, canNext, onNext, onBack, backVisible =
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-slate-900">{question}</h2>
-        {help && <p className="text-sm text-slate-500 mt-1">{help}</p>}
+        <h2 className="text-xl font-semibold text-white">{question}</h2>
+        {help && <p className="text-sm text-slate-400 mt-1">{help}</p>}
       </div>
       {children}
       <div className="flex justify-between pt-4">
@@ -483,7 +538,7 @@ function Step({ question, help, children, canNext, onNext, onBack, backVisible =
           <button
             type="button"
             onClick={onBack}
-            className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900"
+            className="px-4 py-2 text-sm text-slate-400 hover:text-white"
           >
             ← Atrás
           </button>
@@ -494,7 +549,7 @@ function Step({ question, help, children, canNext, onNext, onBack, backVisible =
           type="button"
           onClick={onNext}
           disabled={!canNext || nextDisabled}
-          className="px-6 py-2 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 disabled:opacity-40"
+          className="px-6 py-2 bg-emerald-400 text-slate-900 rounded-lg font-semibold hover:bg-emerald-300 disabled:opacity-40 disabled:cursor-not-allowed transition"
         >
           {nextLabel}
         </button>
@@ -507,9 +562,9 @@ function ProgressBar({ step, total }) {
   const pct = (step / (total - 1)) * 100;
   return (
     <div className="mb-8">
-      <div className="h-1 bg-slate-200 rounded-full overflow-hidden">
+      <div className="h-1 bg-white/10 rounded-full overflow-hidden">
         <div
-          className="h-full bg-slate-900 transition-all duration-300"
+          className="h-full bg-emerald-400 transition-all duration-300"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -525,21 +580,21 @@ function ResultWizard({ result, district, onReset }) {
     PERDIDA_REAL: "🔴 Esta inversión perdería valor real",
   };
   const toneMap = {
-    green: "bg-emerald-50 text-emerald-900",
-    amber: "bg-amber-50 text-amber-900",
-    red: "bg-rose-50 text-rose-900",
+    green: "bg-emerald-400/10 border-emerald-400/30 text-emerald-300",
+    amber: "bg-amber-400/10 border-amber-400/30 text-amber-300",
+    red: "bg-rose-400/10 border-rose-400/30 text-rose-300",
   };
 
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-xs uppercase text-slate-500 font-semibold tracking-wide">Resultado</p>
-        <h2 className="text-xl font-semibold text-slate-900 mt-1">
+        <p className="text-xs uppercase text-slate-400 font-semibold tracking-wide">Resultado</p>
+        <h2 className="text-xl font-semibold text-white mt-1">
           En {district?.name}, después de {result.input.n} años...
         </h2>
       </div>
 
-      <div className={`rounded-xl p-5 ${toneMap[verdict_tone]}`}>
+      <div className={`rounded-xl border p-5 ${toneMap[verdict_tone]}`}>
         <p className="text-lg font-semibold">{verdictMap[verdict]}</p>
       </div>
 
@@ -564,14 +619,14 @@ function ResultWizard({ result, district, onReset }) {
         />
       </div>
 
-      <details className="text-sm text-slate-600">
-        <summary className="cursor-pointer font-medium hover:text-slate-900">Ver el detalle</summary>
-        <div className="mt-3 space-y-1">
-          <p>Valor de la propiedad al final: <strong>${fmt(proyeccion.valor_final_usd)}</strong></p>
-          <p>Plusvalía acumulada: <strong>{proyeccion.plusvalia_acum_pct}%</strong> (+${fmt(proyeccion.plusvalia_usd)})</p>
-          <p>Total cobrado en alquileres: <strong>${fmt(proyeccion.renta_acum_usd)}</strong></p>
-          <p>Inflación acumulada: <strong>{proyeccion.inflacion_acum_pct}%</strong></p>
-          <p className="text-xs text-slate-400 mt-2">
+      <details className="text-sm text-slate-400">
+        <summary className="cursor-pointer font-medium hover:text-white">Ver el detalle</summary>
+        <div className="mt-3 space-y-1 text-slate-400">
+          <p>Valor de la propiedad al final: <strong className="text-white">${fmt(proyeccion.valor_final_usd)}</strong></p>
+          <p>Plusvalía acumulada: <strong className="text-white">{proyeccion.plusvalia_acum_pct}%</strong> (+${fmt(proyeccion.plusvalia_usd)})</p>
+          <p>Total cobrado en alquileres: <strong className="text-white">${fmt(proyeccion.renta_acum_usd)}</strong></p>
+          <p>Inflación acumulada: <strong className="text-white">{proyeccion.inflacion_acum_pct}%</strong></p>
+          <p className="text-xs text-slate-500 mt-2">
             Asumimos vacancia 8%, gastos operativos 0.4% anual, plusvalía proyectada 5% anual e inflación 3%.
           </p>
         </div>
@@ -580,7 +635,7 @@ function ResultWizard({ result, district, onReset }) {
       <button
         type="button"
         onClick={onReset}
-        className="w-full py-2 text-sm text-slate-600 hover:text-slate-900"
+        className="w-full py-2 text-sm text-slate-400 hover:text-white"
       >
         ↺ Empezar de nuevo
       </button>
@@ -589,15 +644,14 @@ function ResultWizard({ result, district, onReset }) {
 }
 
 function BigStat({ label, value, highlight, positive }) {
-  let valueClass = "text-2xl font-bold text-slate-900";
-  if (highlight) valueClass = "text-2xl font-bold text-slate-900";
-  if (positive === true) valueClass = "text-2xl font-bold text-emerald-700";
-  if (positive === false) valueClass = "text-2xl font-bold text-rose-700";
+  let valueClass = "text-2xl font-bold text-white mt-1";
+  if (positive === true) valueClass = "text-2xl font-bold text-emerald-400 mt-1";
+  if (positive === false) valueClass = "text-2xl font-bold text-rose-400 mt-1";
 
   return (
-    <div className={`rounded-xl p-4 ${highlight ? "bg-slate-900 text-white" : "bg-slate-50"}`}>
-      <p className={`text-xs ${highlight ? "text-slate-300" : "text-slate-500"}`}>{label}</p>
-      <p className={highlight ? "text-2xl font-bold text-white mt-1" : `${valueClass} mt-1`}>{value}</p>
+    <div className={`rounded-xl p-4 ${highlight ? "bg-emerald-400 text-slate-900" : "bg-white/5 border border-white/10"}`}>
+      <p className={`text-xs ${highlight ? "text-slate-800" : "text-slate-400"}`}>{label}</p>
+      <p className={highlight ? "text-2xl font-bold text-slate-900 mt-1" : valueClass}>{value}</p>
     </div>
   );
 }
