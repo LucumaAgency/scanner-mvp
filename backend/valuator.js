@@ -61,6 +61,8 @@ export async function valuar({
     active: true,
     // (#1) Solo comparables con ubicación verificada por polígono.
     location_quality: { $in: ["ok", "neighborhood"] },
+    // Excluye listings flageados manualmente como fraudulentos/spam/duplicados.
+    manual_flag: { $exists: false },
     price_usd_per_m2: priceRange,
   };
 
