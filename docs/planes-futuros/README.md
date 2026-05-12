@@ -9,6 +9,7 @@ Cuando una propuesta se construye, su doc se mueve a `docs/` (al lado de `calcul
 | Documento | Estado | Resumen |
 |---|---|---|
 | [historial-de-precios.md](./historial-de-precios.md) | 📝 Diseño · pendiente decisión | Trackear evolución de precios por (distrito × tipo) y cambios de precio en avisos individuales |
+| [upload-de-brochures.md](./upload-de-brochures.md) | 📝 Diseño · pendiente decisión | Drag & drop de PDFs de brochures inmobiliarios → extracción automática con OpenAI → pre-llena la calculadora |
 
 ## Cómo agregar un plan nuevo
 
