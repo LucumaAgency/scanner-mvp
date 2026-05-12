@@ -379,7 +379,7 @@ function HeroLayout({ children }) {
                   className="text-4xl sm:text-5xl lg:text-6xl leading-tight"
                   style={{ fontFamily: "'Montserrat', sans-serif", fontWeight: 700 }}
                 >
-                  Sabe qué precio justo pagar por tu próxima propiedad
+                  Conoce si tu inversión inmobiliaria tendrá un retorno de inversión inteligente
                 </h1>
                 <p className="text-lg text-white/80 leading-relaxed">
                   La diferencia entre invertir bien o mal son los datos. Comparamos
