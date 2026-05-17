@@ -57,17 +57,22 @@ export default function App() {
     setResult(null);
     setSubmitting(true);
     try {
+      const payload = {
+        district: form.district,
+        propertyType: form.propertyType,
+        operation: form.operation,
+        area: Number(form.area),
+        bedrooms: Number(form.bedrooms),
+      };
+      // El precio es opcional: solo lo enviamos si el usuario lo ingresó.
+      // Sin precio, el backend devuelve solo los percentiles de la zona.
+      if (form.priceUsd !== "" && form.priceUsd != null) {
+        payload.priceUsd = Number(form.priceUsd);
+      }
       const res = await fetch("/api/valuar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          district: form.district,
-          propertyType: form.propertyType,
-          operation: form.operation,
-          area: Number(form.area),
-          bedrooms: Number(form.bedrooms),
-          priceUsd: Number(form.priceUsd),
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -216,9 +221,11 @@ export default function App() {
             )}
           </div>
 
-          <Field label={priceLabel}>
+          <Field
+            label={`${priceLabel} (opcional)`}
+            hint="Déjalo vacío para ver solo el precio por m² de la zona."
+          >
             <input
-              required
               type="number"
               min="100"
               value={form.priceUsd}
@@ -242,7 +249,7 @@ export default function App() {
         {result && <ResultCard result={result} />}
 
         {/* La calculadora de inversión aplica solo a venta y necesita los inputs cargados. */}
-        {result?.ok && form.operation === "venta" && (
+        {result?.ok && result.has_price && form.operation === "venta" && (
           <InvestmentSection
             district={selectedDistrict}
             priceUsd={Number(form.priceUsd)}
@@ -329,6 +336,30 @@ function ResultCard({ result }) {
   };
 
   const opLabel = operation === "alquiler" ? "alquiler" : "venta";
+
+  // Sin precio ingresado: mostramos solo el precio/m² de la zona, sin veredicto.
+  if (!result.has_price) {
+    return (
+      <div className="mt-6 bg-white rounded-xl border border-slate-200 p-5 text-sm">
+        <p className="text-slate-500 mb-3">
+          Precio por m² en {result.district} ·{" "}
+          <span className="font-medium text-slate-900">{opLabel}</span>
+        </p>
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <Stat label="P25" value={`$${fmt(market.p25)}`} />
+          <Stat label="Mediana" value={`$${fmt(market.p50)}`} highlight />
+          <Stat label="P75" value={`$${fmt(market.p75)}`} />
+        </div>
+        <p className="text-xs text-slate-500 mt-4">
+          {n_comps} comparables ·{" "}
+          {strategy === "similares" ? "área y dorms similares" : "distrito completo (pocas similares)"}
+        </p>
+        <p className="text-xs text-slate-500 mt-2">
+          Ingresa un precio arriba para obtener un veredicto (bajo / dentro / sobre mercado).
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="mt-6 space-y-4">

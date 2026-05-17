@@ -108,13 +108,18 @@ export async function valuar({
   const p50 = percentile(upms, 0.5);
   const p75 = percentile(upms, 0.75);
 
-  const upmInput = priceUsd / area;
-  const diffPct = ((upmInput - p50) / p50) * 100;
+  // priceUsd opcional: sin precio devolvemos solo los percentiles de la zona
+  // (sin veredicto ni diferencia vs mediana).
+  const hasPrice = Number.isFinite(priceUsd) && priceUsd > 0;
+  const upmInput = hasPrice ? priceUsd / area : null;
+  const diffPct = hasPrice ? ((upmInput - p50) / p50) * 100 : null;
 
-  let verdict;
-  if (upmInput < p25) verdict = "BAJO_MERCADO";
-  else if (upmInput > p75) verdict = "SOBRE_MERCADO";
-  else verdict = "DENTRO_RANGO";
+  let verdict = null;
+  if (hasPrice) {
+    if (upmInput < p25) verdict = "BAJO_MERCADO";
+    else if (upmInput > p75) verdict = "SOBRE_MERCADO";
+    else verdict = "DENTRO_RANGO";
+  }
 
   return {
     ok: true,
@@ -122,11 +127,12 @@ export async function valuar({
     district_slug: district.slug,
     property_type: propertyType,
     operation: op,
+    has_price: hasPrice,
     input: {
       area,
       bedrooms,
-      price_usd: priceUsd,
-      price_usd_per_m2: round(upmInput),
+      price_usd: hasPrice ? priceUsd : null,
+      price_usd_per_m2: hasPrice ? round(upmInput) : null,
     },
     strategy,
     n_comps: nUsed,
@@ -134,7 +140,7 @@ export async function valuar({
     n_district: docs.length,
     market: { p25: round(p25), p50: round(p50), p75: round(p75) },
     verdict,
-    diff_pct: round(diffPct, 1),
+    diff_pct: hasPrice ? round(diffPct, 1) : null,
   };
 }
 

@@ -43,6 +43,10 @@ app.post("/api/valuar", async (req, res) => {
   const errors = validate({ district, propertyType, operation, area, bedrooms, priceUsd });
   if (errors.length) return res.status(400).json({ errors });
 
+  // priceUsd es opcional: si no se envía, devolvemos solo los percentiles
+  // de mercado de la zona (sin veredicto).
+  const priceProvided = priceUsd != null && priceUsd !== "";
+
   try {
     const result = await valuar({
       districtSlug: String(district).trim(),
@@ -50,7 +54,7 @@ app.post("/api/valuar", async (req, res) => {
       operation: String(operation || "venta").trim(),
       area: Number(area),
       bedrooms: Number(bedrooms),
-      priceUsd: Number(priceUsd),
+      priceUsd: priceProvided ? Number(priceUsd) : null,
     });
     res.json(result);
   } catch (e) {
@@ -102,9 +106,12 @@ function validate({ district, propertyType, operation, area, bedrooms, priceUsd 
   if (!Number.isFinite(a) || a < 10 || a > 5000) errs.push("area fuera de rango (10-5000 m²)");
   const b = Number(bedrooms);
   if (!Number.isInteger(b) || b < 0 || b > 15) errs.push("bedrooms fuera de rango (0-15)");
-  const p = Number(priceUsd);
+  // priceUsd es opcional: solo se valida el rango si el usuario lo envió.
   // Min bajo a 100 USD: alquileres mensuales pueden ser de USD 200-3000.
-  if (!Number.isFinite(p) || p < 100 || p > 50_000_000) errs.push("priceUsd fuera de rango (100-50M)");
+  if (priceUsd != null && priceUsd !== "") {
+    const p = Number(priceUsd);
+    if (!Number.isFinite(p) || p < 100 || p > 50_000_000) errs.push("priceUsd fuera de rango (100-50M)");
+  }
   return errs;
 }
 
