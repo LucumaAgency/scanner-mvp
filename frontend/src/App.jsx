@@ -590,31 +590,30 @@ function InvestmentCalculator({ district, priceUsd, areaM2 }) {
         </p>
       </div>
 
-      {/* Datos de la propiedad */}
+      {/* Datos de la propiedad — vienen del valuador, bloqueados */}
       <Section title="Datos de la propiedad">
         <Field
           label="Área m² de la propiedad"
-          hint="Área techada de la unidad."
+          hint="🔒 Tomada de la valuación de arriba. Para cambiarla, edita el área en el valuador."
         >
           <input
             type="number"
-            min="10"
-            max="5000"
             value={inputs.areaM2}
-            onChange={(e) => setField("areaM2", e.target.value)}
-            className="input-sm"
+            disabled
+            readOnly
+            className="input-sm bg-slate-100 text-slate-500 cursor-not-allowed"
           />
         </Field>
         <Field
           label="Precio de compra inversionista (S/.)"
-          hint="Precio de la propiedad en soles. Pre-llenado desde el valuador — ajústalo si tienes el real."
+          hint="🔒 Calculado desde el precio que valuaste (× TC referencial). Para cambiarlo, edita el precio en el valuador."
         >
           <input
             type="number"
-            min="1000"
             value={inputs.precioSoles}
-            onChange={(e) => setField("precioSoles", e.target.value)}
-            className="input-sm"
+            disabled
+            readOnly
+            className="input-sm bg-slate-100 text-slate-500 cursor-not-allowed"
           />
         </Field>
       </Section>
