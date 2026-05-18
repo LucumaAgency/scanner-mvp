@@ -4,12 +4,22 @@
  *   - @napi-rs/canvas   → canvas nativo prebuilt (sin libs de sistema)
  *   - tesseract.js      → reconocimiento óptico (WASM), español
  *
- * Diseñado para hosting restringido (Plesk): todo se instala vía npm.
  * El buffer del PDF vive en memoria y se descarta — nunca toca disco.
- *
- * Si alguna pieza no está instalada/disponible, lanza OcrUnavailableError
- * para que el endpoint degrade con gracia y el usuario siga en modo manual.
+ * Si alguna pieza no está disponible, lanza OcrUnavailableError.
  */
+
+// pdfjs-dist v4 usa Promise.withResolvers() (Node 22+). El server corre
+// Node 21.7.3 → polyfill obligatorio ANTES de importar pdfjs.
+if (typeof Promise.withResolvers !== "function") {
+  Promise.withResolvers = function withResolvers() {
+    let resolve, reject;
+    const promise = new Promise((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  };
+}
 
 export class OcrUnavailableError extends Error {
   constructor(msg) {
@@ -18,45 +28,53 @@ export class OcrUnavailableError extends Error {
   }
 }
 
-const MAX_PAGINAS = 12; // copias literales típicas: 3–10 páginas
-const SCALE = 2.0; // resolución de render (mayor = más preciso, más lento)
+const MAX_PAGINAS = 12;
+const SCALE = 2.0;
 const LANG = process.env.OCR_LANG || "spa";
-// Permite vendorizar el traineddata offline (OCR_LANG_PATH) o dejar que
-// tesseract.js lo descargue del CDN en el primer uso (default).
 const LANG_PATH = process.env.OCR_LANG_PATH || undefined;
 
 let _mods = null;
 async function loadModules() {
   if (_mods) return _mods;
   try {
+    const canvasMod = await import("@napi-rs/canvas");
+    // pdfjs necesita estos globals para rasterizar en Node.
+    for (const k of ["DOMMatrix", "Path2D", "ImageData"]) {
+      if (canvasMod[k] && !globalThis[k]) globalThis[k] = canvasMod[k];
+    }
     const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-    const { createCanvas } = await import("@napi-rs/canvas");
-    const Tesseract = (await import("tesseract.js")).default;
-    _mods = { pdfjs, createCanvas, Tesseract };
+    const Tesseract = await import("tesseract.js");
+    _mods = {
+      createCanvas: canvasMod.createCanvas,
+      pdfjs,
+      createWorker: Tesseract.createWorker || Tesseract.default?.createWorker,
+    };
     return _mods;
   } catch (e) {
     throw new OcrUnavailableError(
-      "Motor OCR no disponible (faltan deps: pdfjs-dist, @napi-rs/canvas, tesseract.js). " +
-        "Instalá dependencias en el servidor. Detalle: " + e.message
+      "Motor OCR no disponible (deps): " + (e?.message || e)
     );
   }
 }
 
-/** Factory mínima de canvas para pdfjs sobre @napi-rs/canvas. */
 function makeCanvasFactory(createCanvas) {
-  return {
+  return class NodeCanvasFactory {
     create(w, h) {
-      const canvas = createCanvas(Math.ceil(w), Math.ceil(h));
+      const canvas = createCanvas(Math.ceil(w) || 1, Math.ceil(h) || 1);
       return { canvas, context: canvas.getContext("2d") };
-    },
+    }
     reset(cc, w, h) {
       cc.canvas.width = Math.ceil(w);
       cc.canvas.height = Math.ceil(h);
-    },
+    }
     destroy(cc) {
-      cc.canvas.width = 0;
-      cc.canvas.height = 0;
-    },
+      if (cc.canvas) {
+        cc.canvas.width = 0;
+        cc.canvas.height = 0;
+      }
+      cc.canvas = null;
+      cc.context = null;
+    }
   };
 }
 
@@ -68,21 +86,27 @@ export async function ocrPdfBuffer(pdfBuffer) {
   if (!pdfBuffer || !pdfBuffer.length) {
     throw new OcrUnavailableError("PDF vacío");
   }
-  const { pdfjs, createCanvas, Tesseract } = await loadModules();
+  const { pdfjs, createCanvas, createWorker } = await loadModules();
+  if (typeof createWorker !== "function") {
+    throw new OcrUnavailableError("tesseract.js: createWorker no disponible");
+  }
 
-  const canvasFactory = makeCanvasFactory(createCanvas);
+  const CanvasFactory = makeCanvasFactory(createCanvas);
+  const canvasFactory = new CanvasFactory();
+
   const doc = await pdfjs.getDocument({
     data: new Uint8Array(pdfBuffer),
     canvasFactory,
-    disableFontFace: true,
     isEvalSupported: false,
+    disableFontFace: true,
+    useSystemFonts: true,
   }).promise;
 
   const nPaginas = Math.min(doc.numPages, MAX_PAGINAS);
 
-  const worker = await Tesseract.createWorker(LANG, 1, {
+  // cacheMethod por defecto ('write') para que pueda traer/cachear el idioma.
+  const worker = await createWorker(LANG, 1, {
     langPath: LANG_PATH,
-    cacheMethod: "readOnly",
     gzip: true,
   });
 
@@ -92,14 +116,13 @@ export async function ocrPdfBuffer(pdfBuffer) {
       const page = await doc.getPage(i);
       const viewport = page.getViewport({ scale: SCALE });
       const cc = canvasFactory.create(viewport.width, viewport.height);
-      await page.render({ canvasContext: cc.context, viewport, canvasFactory })
-        .promise;
+      await page.render({ canvasContext: cc.context, viewport }).promise;
       const png = cc.canvas.toBuffer("image/png");
       canvasFactory.destroy(cc);
       page.cleanup();
 
       const { data } = await worker.recognize(png);
-      texto += "\n" + (data.text || "");
+      texto += "\n" + (data?.text || "");
     }
   } finally {
     await worker.terminate();

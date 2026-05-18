@@ -217,7 +217,11 @@ app.post("/api/copia-literal", async (req, res) => {
         });
       }
       console.error("[/api/copia-literal]", e);
-      return res.status(500).json({ ok: false, error: "internal" });
+      // Diagnóstico temporal (sin acceso a logs/SSH): exponemos el error real.
+      return res.status(500).json({
+        ok: false,
+        error: `Error al procesar el PDF — ${e?.name || "Error"}: ${e?.message || e}`,
+      });
     } finally {
       // Descarta el PDF de memoria explícitamente.
       buffer = null;
