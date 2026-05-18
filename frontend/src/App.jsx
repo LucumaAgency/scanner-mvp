@@ -483,7 +483,8 @@ function defaultsFromDistrict(district, priceUsd) {
     },
     g: 0.05,
     n: 10,
-    inflacion: 0.03,
+    inflacion: 0.035,
+    tipoCambio: 3.5,
   };
 }
 
@@ -547,6 +548,7 @@ function InvestmentCalculator({ district, priceUsd, areaM2 }) {
           g: Number(inputs.g),
           n: Number(inputs.n),
           inflacion: Number(inputs.inflacion),
+          tipoCambio: Number(inputs.tipoCambio) || undefined,
         }),
       });
       const data = await res.json();
@@ -689,7 +691,7 @@ function InvestmentCalculator({ district, priceUsd, areaM2 }) {
               className="input-sm"
             />
           </Field>
-          <Field label="π (inflación)" hint="0.03 = 3%">
+          <Field label="π (inflación)" hint="0.035 = 3.5%">
             <input
               type="number"
               step="0.005"
@@ -701,6 +703,21 @@ function InvestmentCalculator({ district, priceUsd, areaM2 }) {
             />
           </Field>
         </div>
+        <Field
+          label="Tipo de cambio (S/. por USD)"
+          hint="Para mostrar también los montos en soles. Actualizar al TC del mes (BCRP/SBS)."
+        >
+          <input
+            type="number"
+            step="0.01"
+            min="1"
+            max="10"
+            value={inputs.tipoCambio}
+            onChange={(e) => setField("tipoCambio", e.target.value)}
+            className="input-sm"
+          />
+        </Field>
+        <CagrHelper onUseG={(g) => setField("g", g)} />
       </Section>
 
       <button
@@ -759,8 +776,12 @@ function InvestmentResult({ result }) {
 
   const verdictMeta = {
     GANANCIA_REAL: {
-      label: "Ganancia real",
-      hint: "La rentabilidad supera la inflación acumulada.",
+      label: "Ganancia real — buena inversión",
+      hint: "La rentabilidad total supera la inflación acumulada: ganas poder adquisitivo.",
+    },
+    NEUTRO: {
+      label: "Neutro — empatas con la inflación",
+      hint: "La rentabilidad iguala a la inflación acumulada: ni ganas ni pierdes en términos reales.",
     },
     GANANCIA_NOMINAL: {
       label: "Ganancia nominal — pierde contra inflación",
@@ -768,9 +789,9 @@ function InvestmentResult({ result }) {
     },
     PERDIDA_REAL: {
       label: "Pérdida real",
-      hint: "El valor total obtenido no cubre la inflación acumulada.",
+      hint: "La rentabilidad no cubre la inflación acumulada: pierdes poder adquisitivo.",
     },
-  }[verdict];
+  }[verdict] || { label: verdict, hint: "" };
 
   const toneMap = {
     green: "bg-emerald-50 border-emerald-200 text-emerald-900",
@@ -810,13 +831,20 @@ function InvestmentResult({ result }) {
             </tr>
           </thead>
           <tbody className="text-slate-800">
-            <RatioRow label="CAP rate (bruto)" values={["cap_rate", "%"]} ratios={ratios} />
-            <RatioRow label="NET CAP rate" values={["net_cap_rate", "%"]} ratios={ratios} />
-            <RatioRow label="PER bruto (años)" values={["per", ""]} ratios={ratios} />
-            <RatioRow label="PER neto (años)" values={["per_neto", ""]} ratios={ratios} />
+            <RatioRow label="CAP rate (bruto)" values={["cap_rate", "%"]} ratios={ratios} bench="cap_rate" />
+            <RatioRow label="NET CAP rate" values={["net_cap_rate", "%"]} ratios={ratios} bench="net_cap_rate" />
+            <RatioRow label="PER bruto (años)" values={["per", ""]} ratios={ratios} bench="per" />
+            <RatioRow label="PER neto (años)" values={["per_neto", ""]} ratios={ratios} bench="per_neto" />
             <RatioRow label="Renta neta anual (USD)" values={["ing_neto_anual_usd", "$"]} ratios={ratios} />
           </tbody>
         </table>
+        {result.benchmarks && (
+          <p className="text-xs text-slate-500 mt-3">
+            ✅ cumple benchmark (escenario promedio) · CAP &gt;{result.benchmarks.cap_rate}% ·
+            NET &gt;{result.benchmarks.net_cap_rate}% · PER &lt;{result.benchmarks.per} ·
+            PER neto &lt;{result.benchmarks.per_neto}
+          </p>
+        )}
       </div>
 
       {/* Proyección */}
@@ -828,6 +856,13 @@ function InvestmentResult({ result }) {
           {tiempos.años_sin_renta} años en preventa · {tiempos.años_con_renta} años con renta
         </p>
         <div className="space-y-2 text-sm">
+          {proyeccion.plusvalia_inmediata_usd > 0 && (
+            <ProyRow
+              label="Plusvalía inmediata (día 1)"
+              value={`+$${fmt(proyeccion.plusvalia_inmediata_usd)} (${proyeccion.plusvalia_inmediata_pct}%)`}
+              positive
+            />
+          )}
           <ProyRow label="Valor a la entrega" value={`$${fmt(proyeccion.valor_entrega_usd)}`} />
           <ProyRow label={`Valor final (${result.input.n}a)`} value={`$${fmt(proyeccion.valor_final_usd)}`} />
           <ProyRow label="Plusvalía acumulada" value={`+$${fmt(proyeccion.plusvalia_usd)} (${proyeccion.plusvalia_acum_pct}%)`} />
@@ -836,12 +871,70 @@ function InvestmentResult({ result }) {
           <ProyRow label="Mínimo anti-inflación" value={`$${fmt(proyeccion.inversion_ajustada_usd)}`} muted />
           <ProyRow label="Ganancia real (vs inflación)" value={`$${fmt(proyeccion.ganancia_real_usd)}`} bold positive={proyeccion.ganancia_real_usd >= 0} />
         </div>
+        {result.soles && (
+          <div className="mt-4 pt-3 border-t border-slate-100">
+            <p className="text-xs text-slate-500 mb-2">
+              Equivalente en soles (TC S/.{result.soles.tipo_cambio}/USD):
+            </p>
+            <div className="space-y-1 text-sm">
+              <ProyRow label="Total obtenido (S/.)" value={`S/.${fmt(result.soles.valor_total_obtenido)}`} />
+              <ProyRow
+                label="Ganancia real (S/.)"
+                value={`S/.${fmt(result.soles.ganancia_real)}`}
+                bold
+                positive={result.soles.ganancia_real >= 0}
+              />
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Proyección año a año */}
+      {Array.isArray(result.proyeccion_anual) && result.proyeccion_anual.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <p className="text-sm font-semibold text-slate-800 mb-1">Año a año</p>
+          <p className="text-xs text-slate-500 mb-3">
+            Rentas = $0 durante la preventa. La renta crece con inflación (π).
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-slate-500 uppercase">
+                  <th className="text-left font-medium pb-2">Año</th>
+                  <th className="text-right font-medium pb-2">Valor inmueble</th>
+                  <th className="text-right font-medium pb-2">Renta neta</th>
+                  <th className="text-right font-medium pb-2">Rent. total</th>
+                  <th className="text-right font-medium pb-2">Inflación</th>
+                </tr>
+              </thead>
+              <tbody className="text-slate-800">
+                {result.proyeccion_anual.map((f) => (
+                  <tr key={f.anio} className="border-t border-slate-100">
+                    <td className="py-1.5 text-slate-700">{f.anio}</td>
+                    <td className="py-1.5 text-right">${fmt(f.valor_inmueble_usd)}</td>
+                    <td className="py-1.5 text-right">${fmt(f.renta_anual_neta_usd)}</td>
+                    <td
+                      className={`py-1.5 text-right font-medium ${
+                        f.rentabilidad_total_pct >= f.inflacion_acum_pct
+                          ? "text-emerald-700"
+                          : "text-rose-700"
+                      }`}
+                    >
+                      {f.rentabilidad_total_pct}%
+                    </td>
+                    <td className="py-1.5 text-right text-slate-500">{f.inflacion_acum_pct}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function RatioRow({ label, values, ratios }) {
+function RatioRow({ label, values, ratios, bench }) {
   const [field, suffix] = values;
   const renderVal = (v) => {
     if (v == null) return "—";
@@ -849,13 +942,111 @@ function RatioRow({ label, values, ratios }) {
     if (suffix === "$") return `$${fmt(v)}`;
     return fmt2(v);
   };
+  const ok = bench ? ratios.promedio.cumple?.[bench] : null;
   return (
     <tr className="border-t border-slate-100">
       <td className="py-2 text-slate-700">{label}</td>
       <td className="py-2 text-right">{renderVal(ratios.pesimista[field])}</td>
-      <td className="py-2 text-right font-medium">{renderVal(ratios.promedio[field])}</td>
+      <td className="py-2 text-right font-medium">
+        {renderVal(ratios.promedio[field])}
+        {ok != null && <span className="ml-1">{ok ? "✅" : "⚠️"}</span>}
+      </td>
       <td className="py-2 text-right">{renderVal(ratios.optimista[field])}</td>
     </tr>
+  );
+}
+
+/**
+ * Calcula la `g` recomendada desde el CAGR histórico de la zona (Excel "Plusvalía
+ * Zona"). Opcional: si el user no tiene datos, igual devuelve la regla conservadora.
+ */
+function CagrHelper({ onUseG }) {
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState({
+    ubicacion: "Lima",
+    anioInicial: "",
+    precioInicial: "",
+    anioActual: "",
+    precioActual: "",
+  });
+  const [res, setRes] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const upd = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
+
+  async function calc() {
+    setLoading(true);
+    setRes(null);
+    try {
+      const r = await fetch("/api/tasa-g", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(f),
+      });
+      setRes(await r.json());
+    } catch {
+      setRes({ ok: false });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="text-sm font-medium text-slate-700"
+      >
+        {open ? "▲ " : "▼ "}Calcular g desde el histórico de la zona (CAGR)
+      </button>
+      {open && (
+        <div className="mt-3 space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Ubicación">
+              <input value={f.ubicacion} onChange={upd("ubicacion")} className="input-sm" placeholder="Lima / provincia" />
+            </Field>
+            <Field label="Año precio inicial">
+              <input type="number" value={f.anioInicial} onChange={upd("anioInicial")} className="input-sm" placeholder="2019" />
+            </Field>
+            <Field label="Precio inicial">
+              <input type="number" value={f.precioInicial} onChange={upd("precioInicial")} className="input-sm" placeholder="120000" />
+            </Field>
+            <Field label="Año actual">
+              <input type="number" value={f.anioActual} onChange={upd("anioActual")} className="input-sm" placeholder="2025" />
+            </Field>
+            <Field label="Precio actual">
+              <input type="number" value={f.precioActual} onChange={upd("precioActual")} className="input-sm" placeholder="235000" />
+            </Field>
+          </div>
+          <button
+            type="button"
+            onClick={calc}
+            disabled={loading}
+            className="w-full bg-slate-200 text-slate-900 rounded-lg py-2 text-sm font-medium hover:bg-slate-300 disabled:opacity-60"
+          >
+            {loading ? "Calculando..." : "Calcular tasa recomendada"}
+          </button>
+          {res?.ok && (
+            <div className="text-sm text-slate-700 space-y-1">
+              <p>
+                CAGR histórico: <b>{res.cagr_pct != null ? `${res.cagr_pct}%` : "sin dato propio"}</b>
+              </p>
+              <p>
+                g recomendada (conservadora): <b>{res.g_recomendada_pct}%</b>
+              </p>
+              <p className="text-xs text-slate-500">{res.regla}</p>
+              <button
+                type="button"
+                onClick={() => onUseG(res.g_recomendada)}
+                className="mt-1 bg-slate-900 text-white rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-slate-800"
+              >
+                Usar {res.g_recomendada_pct}% como g
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

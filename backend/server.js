@@ -4,7 +4,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { connect } from "./db.js";
 import { valuar, listDistricts } from "./valuator.js";
-import { calcularInversion, validateCalculatorInput } from "./calculator.js";
+import {
+  calcularInversion,
+  validateCalculatorInput,
+  tasaGRecomendada,
+  validateTasaGInput,
+} from "./calculator.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -75,6 +80,29 @@ app.post("/api/calcular", (req, res) => {
     res.json(result);
   } catch (e) {
     console.error("[/api/calcular]", e);
+    res.status(500).json({ error: "internal" });
+  }
+});
+
+// Regla automática de `g` (plusvalía) desde el CAGR histórico de la zona.
+// Todos los inputs opcionales: sin datos devuelve la regla conservadora.
+app.post("/api/tasa-g", (req, res) => {
+  const errors = validateTasaGInput(req.body || {});
+  if (errors.length) return res.status(400).json({ errors });
+
+  try {
+    const body = req.body || {};
+    const num = (v) => (v == null || v === "" ? undefined : Number(v));
+    const result = tasaGRecomendada({
+      ubicacion: body.ubicacion,
+      anioInicial: num(body.anioInicial),
+      precioInicial: num(body.precioInicial),
+      anioActual: num(body.anioActual),
+      precioActual: num(body.precioActual),
+    });
+    res.json(result);
+  } catch (e) {
+    console.error("[/api/tasa-g]", e);
     res.status(500).json({ error: "internal" });
   }
 });

@@ -75,7 +75,9 @@ export function buildDefaults(district, priceUsd, areaM2) {
     },
     g: 0.05,
     n: 10,
-    inflacion: 0.03,
+    inflacion: 0.035,
+    // S/. por USD — solo para mostrar equivalentes en soles. Actualizar al TC del mes.
+    tipoCambio: 3.5,
   };
 }
 
