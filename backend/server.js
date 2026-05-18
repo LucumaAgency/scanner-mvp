@@ -206,7 +206,13 @@ app.post("/api/copia-literal", async (req, res) => {
         });
       }
 
-      res.json({ ...datos, paginas_ocr: pages, g_sugerida });
+      // texto_ocr: diagnóstico temporal para ajustar el parser sin logs/SSH.
+      res.json({
+        ...datos,
+        paginas_ocr: pages,
+        g_sugerida,
+        texto_ocr: String(text || "").slice(0, 9000),
+      });
     } catch (e) {
       if (e?.name === "OcrUnavailableError") {
         console.error("[/api/copia-literal] OCR no disponible:", e.message);

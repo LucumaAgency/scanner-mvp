@@ -1097,6 +1097,17 @@ function CagrHelper({ onUseG }) {
                     — tenlo en cuenta en la decisión.
                   </p>
                 )}
+                {copia.texto_ocr && (
+                  <details className="text-xs text-slate-500">
+                    <summary className="cursor-pointer">Ver texto leído del PDF (debug)</summary>
+                    <textarea
+                      readOnly
+                      value={copia.texto_ocr}
+                      onClick={(e) => e.target.select()}
+                      className="mt-1 w-full h-40 text-[10px] font-mono border border-slate-200 rounded p-2"
+                    />
+                  </details>
+                )}
                 {copia.cagr?.ok ? (
                   <>
                     <p>
