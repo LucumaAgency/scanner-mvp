@@ -206,13 +206,7 @@ app.post("/api/copia-literal", async (req, res) => {
         });
       }
 
-      // texto_ocr: diagnóstico temporal para ajustar el parser sin logs/SSH.
-      res.json({
-        ...datos,
-        paginas_ocr: pages,
-        g_sugerida,
-        texto_ocr: String(text || "").slice(0, 9000),
-      });
+      res.json({ ...datos, paginas_ocr: pages, g_sugerida });
     } catch (e) {
       if (e?.name === "OcrUnavailableError") {
         console.error("[/api/copia-literal] OCR no disponible:", e.message);
@@ -223,10 +217,9 @@ app.post("/api/copia-literal", async (req, res) => {
         });
       }
       console.error("[/api/copia-literal]", e);
-      // Diagnóstico temporal (sin acceso a logs/SSH): exponemos el error real.
       return res.status(500).json({
         ok: false,
-        error: `Error al procesar el PDF — ${e?.name || "Error"}: ${e?.message || e}`,
+        error: "No pudimos procesar el PDF. Continúa ingresando la plusvalía a mano.",
       });
     } finally {
       // Descarta el PDF de memoria explícitamente.

@@ -189,6 +189,9 @@ test("OCR real de la partida 11010149: 3 compraventas + aporte excluido", () => 
   assert.equal(r.cagr.precio_inicial, 2000);
   assert.equal(r.cagr.anio_final, 2021);
   assert.equal(r.cagr.precio_final, 192000);
+  // ~33%/año es implausible → debe marcarse poco confiable (subvaluación 2005).
+  assert.equal(r.cagr.confiable, false);
+  assert.match(r.cagr.nota, /implausible|subvalua/i);
 });
 
 test("calcularCagr directo: insuficiente vs válido", () => {

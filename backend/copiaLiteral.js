@@ -235,13 +235,31 @@ export function calcularCagr(transferencias) {
   const vn = pn.monto / (pn.fraccion || 1);
   const cagr = Math.pow(vn / v0, 1 / anios) - 1;
 
-  // Confiable solo si misma moneda, post-1991 (sin reformas) y fracción completa.
+  // Plausibilidad: una plusvalía sostenida real rara vez supera ~20%/año.
+  // Un CAGR fuera de [-10%, 20%] casi siempre = precio antiguo subvaluado
+  // (declarar menos para pagar menos alcabala) → no confiable.
+  const plausible = cagr >= -0.1 && cagr <= 0.2;
   const confiable =
+    plausible &&
     p0.moneda === pn.moneda &&
     p0.moneda === "PEN" &&
     p0.anio >= 1991 &&
     p0.fraccion === 1 &&
     pn.fraccion === 1;
+
+  let nota;
+  if (confiable) {
+    nota = "CAGR nominal — referencial (los montos registrales suelen estar subvaluados).";
+  } else if (!plausible) {
+    nota =
+      "CAGR poco confiable: el salto de precio es implausible — casi seguro el monto " +
+      "más antiguo está subvaluado (es habitual declarar menos en la escritura). " +
+      "Tómalo solo como referencia; usamos la tasa conservadora.";
+  } else {
+    nota =
+      "CAGR poco confiable: monedas distintas, montos pre-1991 o transferencia parcial. " +
+      "Úsalo solo como referencia.";
+  }
 
   return {
     ok: true,
@@ -253,8 +271,6 @@ export function calcularCagr(transferencias) {
     cagr_pct: Math.round(cagr * 1000) / 10,
     moneda: p0.moneda,
     confiable,
-    nota: confiable
-      ? "CAGR nominal — referencial (los montos registrales suelen estar subvaluados)."
-      : "CAGR poco confiable: monedas distintas, montos pre-1991 o transferencia parcial. Úsalo solo como referencia.",
+    nota,
   };
 }
