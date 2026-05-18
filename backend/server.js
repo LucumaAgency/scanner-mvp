@@ -52,6 +52,35 @@ app.get("/api/health", (_req, res) =>
   })
 );
 
+// Diagnóstico desde el navegador (sin SSH): ¿qué módulos opcionales cargan?
+app.get("/api/diag", async (_req, res) => {
+  const probe = async (spec) => {
+    try {
+      const m = await import(spec);
+      return { ok: true, version: m?.default?.version || m?.version || "?" };
+    } catch (e) {
+      return { ok: false, error: e?.code || e?.message };
+    }
+  };
+  const [multer, canvas, pdfjs, tesseract] = await Promise.all([
+    probe("multer"),
+    probe("@napi-rs/canvas"),
+    probe("pdfjs-dist/legacy/build/pdf.mjs"),
+    probe("tesseract.js"),
+  ]);
+  res.json({
+    ok: true,
+    cwd: process.cwd(),
+    nodeVersion: process.version,
+    copiaLiteral: {
+      uploadGate: multer.ok ? "OK" : "FALTA multer",
+      ocrEngine:
+        canvas.ok && pdfjs.ok && tesseract.ok ? "OK" : "incompleto",
+      modules: { multer, "@napi-rs/canvas": canvas, "pdfjs-dist": pdfjs, "tesseract.js": tesseract },
+    },
+  });
+});
+
 app.get("/api/distritos", async (_req, res) => {
   try {
     const districts = await listDistricts();
