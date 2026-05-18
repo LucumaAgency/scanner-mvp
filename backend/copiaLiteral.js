@@ -29,7 +29,12 @@ const ACTO_PATTERNS = [
   { acto: "aporte", re: /APORTE\b/i },
 ];
 
-const ASIENTO_RE = /\b([A-D]\s?0{0,4}\d{1,5})\b/g;
+// Encabezados de acto fuertes: con esto se delimitan los asientos. NO usamos
+// los códigos (C00001…) porque el OCR los destroza ("Co0001", "Conoo4").
+// Solo MAYÚSCULAS (case-sensitive, sin /i): los encabezados de asiento están
+// en mayúscula; así NO confundimos la prosa ("...en virtud a la compra venta").
+const ANCLA_ACTO_RE =
+  /(COMPRA\s*[-\s]*VENTA|DACI[ÓO]N\s+EN\s+PAGO|ANTICIPO\s+DE\s+LEG[ÍI]TIMA|DONACI[ÓO]N|SUCESI[ÓO]N\s+INTESTADA|ADJUDICACI[ÓO]N|DIVISI[ÓO]N\s+Y\s+PARTICI[ÓO]N|TRANSFERENCIA\s+POR\s+APORTE|APORTE\s+DE\s+CAPITAL)/g;
 
 function normalizarMonto(raw) {
   if (!raw) return null;
@@ -67,8 +72,10 @@ function parseFecha(d, m, y) {
 }
 
 function buscarFechaActo(bloque) {
-  // Prioridad: "ESCRITURA PÚBLICA de fecha DD/MM/YYYY"; fallback "presentado el …".
-  const esc = bloque.match(/ESCRITURA\s+P[ÚU]BLICA\s+de\s+fecha\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/i);
+  // "ESCRITURA PÚBLICA [N° 43] de fecha DD/MM/YYYY" (tolerante a ruido OCR).
+  const esc = bloque.match(
+    /ESCRITURA\s+P[ÚU]BLICA[\s\S]{0,40}?de\s+fecha\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/i
+  );
   if (esc) return parseFecha(esc[1], esc[2], esc[3]);
   const pres = bloque.match(/present[ao]d[oa]\s+el\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/i);
   if (pres) return parseFecha(pres[1], pres[2], pres[3]);
@@ -77,14 +84,20 @@ function buscarFechaActo(bloque) {
 }
 
 function buscarMonto(bloque) {
-  // "por el precio de S/. 2,000.00"  (tolerante a ruido OCR en el símbolo)
+  // "por el precio de [ruido] S/. 2,000.00" — el OCR mete "_", saltos de línea,
+  // "SI."/"S1." por "S/.", "Nuevos Soles"/"SOLES" detrás, etc. Saltamos hasta
+  // 25 chars no numéricos entre la frase clave y la cifra.
   const re =
-    /(?:por\s+el\s+precio\s+de|precio\s+pactado|suma\s+de|valor\s+de)\s*(US\$|S\s*\/?\s*\.?|S1\.?|SI\.?|I\s*\/?\s*\.?|\$)?\s*([\d.,]{2,})/i;
+    /(?:por\s+el\s+precio\s+de|precio\s+pactado(?:\s+en)?|suma\s+de|valorizad[oa]\s+en)([^0-9]{0,25}?)(\d[\d.,]*\d|\d)/i;
   const m = bloque.match(re);
   if (!m) return { monto: null, moneda: null };
-  // Recorta separadores colgantes (ej. "2,000.00," por la coma siguiente).
+  const gap = m[1] || "";
+  let moneda = "PEN";
+  if (/US\s*\$|USD|D[ÓO]LAR/i.test(gap)) moneda = "USD";
+  else if (/\bI\s*\/\s*\.?|INTI/i.test(gap)) moneda = "ITL";
+  else if (/ORO/i.test(gap)) moneda = "SOL_ORO";
   const limpio = m[2].replace(/^[.,]+|[.,]+$/g, "");
-  return { monto: normalizarMonto(limpio), moneda: detectarMoneda(m[1]) };
+  return { monto: normalizarMonto(limpio), moneda };
 }
 
 function buscarFraccion(bloque) {
@@ -108,19 +121,19 @@ function detectarActo(bloque) {
   return "otro";
 }
 
-/** Divide el texto OCR en bloques por asiento (C00001, B00002, D0001…). */
-function partirEnAsientos(texto) {
-  const idxs = [];
+/** Divide el texto OCR en bloques, uno por cada acto (COMPRA VENTA, etc.). */
+function partirPorActos(texto) {
+  const anclas = [];
   let m;
-  ASIENTO_RE.lastIndex = 0;
-  while ((m = ASIENTO_RE.exec(texto))) {
-    idxs.push({ asiento: m[1].replace(/\s/g, ""), pos: m.index });
+  ANCLA_ACTO_RE.lastIndex = 0;
+  while ((m = ANCLA_ACTO_RE.exec(texto))) {
+    anclas.push({ pos: m.index, head: m[0] });
   }
   const bloques = [];
-  for (let i = 0; i < idxs.length; i++) {
-    const ini = idxs[i].pos;
-    const fin = i + 1 < idxs.length ? idxs[i + 1].pos : texto.length;
-    bloques.push({ asiento: idxs[i].asiento, texto: texto.slice(ini, fin) });
+  for (let i = 0; i < anclas.length; i++) {
+    const ini = anclas[i].pos;
+    const fin = i + 1 < anclas.length ? anclas[i + 1].pos : texto.length;
+    bloques.push({ head: anclas[i].head, texto: texto.slice(ini, fin) });
   }
   return bloques;
 }
@@ -154,29 +167,30 @@ export function parseCopiaLiteral(texto = "") {
     vigente = dias <= 90;
   }
 
-  const partidaM = t.match(/Partida(?:\s+Registral)?\s*N[°º:\s]*\s*([0-9]{5,})/i) ||
-    t.match(/PART\.?\s*ELECT\.?\s*N[°ºo:\s]*\s*([0-9]{5,})/i);
+  // "N° Partida: 11010149" / "PART. ELECT. No 11010149" (tolerante a ruido).
+  const partidaM =
+    t.match(/Partida(?:\s+Registral)?[^0-9]{0,12}(\d{7,9})/i) ||
+    t.match(/PART\.?\s*ELECT?\.?[^0-9]{0,12}(\d{7,9})/i);
   const partida = partidaM ? partidaM[1] : null;
 
-  // "OFICINA REGISTRAL <CIUDAD>" trae la ciudad directa (la línea ZONA trae "SEDE").
-  const ofM =
-    t.match(/OFICINA\s+REGISTRAL\s+([A-ZÁÉÍÓÚÑ]{3,}(?:\s+[A-ZÁÉÍÓÚÑ]{3,})?)/i) ||
-    t.match(/\b(LIMA|PUCALLPA|AREQUIPA|CUSCO|TRUJILLO|PIURA|CHICLAYO|ICA|TACNA|HUANCAYO|IQUITOS)\b/i);
-  const oficina = ofM ? ofM[1].trim() : null;
-  const esLima = /\bLIMA\b/i.test(oficina || "");
+  // Ciudad de la oficina: lista cerrada (el OCR mete "SUPERINTENDENCIA" detrás).
+  const ofM = t.match(
+    /\b(LIMA|PUCALLPA|AREQUIPA|CUSCO|TRUJILLO|PIURA|CHICLAYO|ICA|TACNA|HUANCAYO|IQUITOS|CALLAO|HUANUCO|TARAPOTO)\b/i
+  );
+  const oficina = ofM ? ofM[1].toUpperCase() : null;
+  const esLima = oficina === "LIMA" || oficina === "CALLAO";
 
   const cargas = detectarCargas(t);
 
   const transferencias = [];
-  for (const b of partirEnAsientos(t)) {
-    const acto = detectarActo(b.texto);
+  for (const b of partirPorActos(t)) {
+    const acto = detectarActo(b.head) === "otro" ? detectarActo(b.texto) : detectarActo(b.head);
     if (acto === "otro") continue;
     const { monto, moneda } = buscarMonto(b.texto);
     const fecha = buscarFechaActo(b.texto);
     const fraccion = buscarFraccion(b.texto);
     if (!fecha) continue;
     transferencias.push({
-      asiento: b.asiento,
       acto,
       es_mercado: ACTOS_MERCADO.includes(acto),
       fecha: fecha.iso,

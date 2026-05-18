@@ -129,6 +129,68 @@ test("normalización de montos con separadores", () => {
   assert.equal(b.transferencias[0].moneda, "USD");
 });
 
+// Texto OCR REAL (tesseract) de la partida 11010149 — condensado pero fiel a
+// los puntos difíciles: "_S/.", "S/. ... Nuevos Soles", "SI. ... SOLES",
+// "Escritura Pública N” 43 de fecha", aporte de capital (no es mercado),
+// y códigos de asiento ilegibles (Co0002, Conoo4, Coooos).
+const OCR_REAL = `
+ZONA REGISTRAL N* VI. SEDE PUCALLPA
+OFICINA REGISTRAL PUCALLPA
+SUPERINTENDENCIA NACIONAL N* Partida: 11010149
+Fecha Impresión :  08/11/2023 19:40:44
+RUBRO : TITULOS DE DOMINIO
+Co0001 DERECHO DE PROPIEDAD El (los) poseedor (es) ... Inscripción de oficio,
+según D. Leg N” 667.- El título fue presentado el 25/02/2005 a las 08:35:23 AM.
+RUBRO : TITULOS DE DOMINIO
+Co0002 VENDEDOR : Eleazar VELASQUEZ NAVARRO, divorciado
+COMPRA VENTA A favor de NORA ROJAS DE PANDURO, casada con WILIAN ARMANDO
+PANDURO BANDA, por el precio de _S/. 2,000.00, pagados con dinero en efectivo.- Asi
+consta de la ESCRITURA PÚBLICA de fecha 08/09/2005 otorgada ante el Notario.
+El título fue presentado el 12/09/2005 a las 08:58:40 AM.
+RUBRO : TITULOS DE DOMINIO
+Co00o1 VENDEDOR : Willian Armando PANDURO BANDA, casado con Nora ROJAS DE PANDURO
+COMPRA VENTA A favor de VLADIMIR JESÚS GUERRA RETAMOZO, soltero, por el precio de
+S/. 10,000.00 Nuevos Soles, que son pagados al contado. Así consta de la
+Escritura Pública de fecha 27/09/2005 otorgada ante la Notario.
+El título fue presentado el 01/12/2005 a las 11:58:05 AM.
+RUBRO : TITULOS DE DOMINIO
+Conoo4 VENDEDOR: VLADIMIR JESUS GUERRA RETAMOZO
+COMPRA VENTA: A favor de DEYSI JENNY CORDOVA OROZ, soltera, con D.N.I N* 45955089,
+ha adquirido el derecho de propiedad del inmueble registrado en la presente partida,
+por el precio de SI. 192,000.00 SOLES, totalmente cancelados, en virtud a la compra
+venta. Así consta en la Escritura Pública N” 43 de fecha 12/01/2021, otorgada ante notario.
+El titulo fue presentado el 13/01/2021 a las 12:48:33 PM.
+RUBRO: TITULOS DE DOMINIO
+Coooos TRANSFERENCIA POR APORTE DE CAPITAL: VIVE 360 INMOBILIARIA S.A.C., con
+R.U.C. N* 20608026046, inscrita en la Partida Electrónica N* 14685775, ha adquirido
+el derecho de propiedad ... valorizado en S/. 192,000 (CIENTO NOVENTA Y DOS MIL),
+en mérito al Aporte de Capital. Así consta de la escritura pública N* 1095 de fecha
+27/07/2021. El título fue presentado el 02/08/2021 a las 08:17:46 AM.
+`;
+
+test("OCR real de la partida 11010149: 3 compraventas + aporte excluido", () => {
+  const r = parseCopiaLiteral(OCR_REAL);
+  assert.equal(r.partida, "11010149");
+  assert.equal(r.oficina_registral, "PUCALLPA");
+  assert.equal(r.es_lima, false);
+
+  const cv = r.transferencias.filter((x) => x.acto === "compraventa");
+  assert.equal(cv.length, 3, "deben detectarse 3 compraventas");
+  const montos = cv.map((x) => x.monto).sort((a, b) => a - b);
+  assert.deepEqual(montos, [2000, 10000, 192000]);
+
+  const aporte = r.transferencias.find((x) => x.acto === "aporte");
+  assert.ok(aporte, "el aporte de capital se detecta");
+  assert.equal(aporte.es_mercado, false);
+
+  // CAGR: primera compraventa de mercado (2005, S/.2,000) → última (2021, S/.192,000)
+  assert.equal(r.cagr.ok, true);
+  assert.equal(r.cagr.anio_inicial, 2005);
+  assert.equal(r.cagr.precio_inicial, 2000);
+  assert.equal(r.cagr.anio_final, 2021);
+  assert.equal(r.cagr.precio_final, 192000);
+});
+
 test("calcularCagr directo: insuficiente vs válido", () => {
   assert.equal(calcularCagr([]).ok, false);
   const r = calcularCagr([
