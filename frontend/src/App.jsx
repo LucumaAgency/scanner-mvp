@@ -452,53 +452,62 @@ function InvestmentSection({ district, priceUsd, areaM2 }) {
   );
 }
 
-function defaultsFromDistrict(district, priceUsd) {
+// Tipo de cambio S/. por USD. NO es editable por el usuario (referencia fija;
+// el cálculo es S/.-nativo y se convierte a USD internamente para el backend).
+const TIPO_CAMBIO = 3.5;
+
+// Genera los valores iniciales (en S/.) pre-llenados con datos del distrito y
+// del valuador. Todos son editables por el usuario salvo el tipo de cambio.
+function defaultsFromDistrict(district, priceUsd, areaM2) {
   const stats = district?.stats || {};
-  // Si tenemos stats reales de alquiler para este distrito, las usamos como
-  // pesimista/promedio/optimista (p25/median/p75).
+  // Stats de alquiler del distrito están en USD/m²/mes → a S/.
   const alqP25 = stats.p25_price_usd_per_m2_alquiler;
   const alqMed = stats.median_price_usd_per_m2_alquiler;
   const alqP75 = stats.p75_price_usd_per_m2_alquiler;
+  const toSoles = (v) => Math.round(v * TIPO_CAMBIO * 10) / 10;
 
-  // Fallback: defaults conservadores típicos de Lima si no hay data.
-  const alquiler = {
-    pesimista: alqP25 ?? 10,
-    promedio: alqMed ?? 15,
-    optimista: alqP75 ?? 22,
+  const alquilerSoles = {
+    pesimista: alqP25 != null ? toSoles(alqP25) : 35,
+    promedio: alqMed != null ? toSoles(alqMed) : 45,
+    optimista: alqP75 != null ? toSoles(alqP75) : 55,
   };
 
+  const precioSoles = Math.round((priceUsd || 0) * TIPO_CAMBIO);
   const today = new Date();
   return {
-    plusvaliaInmediataUsd: 0,
+    precioSoles,
+    areaM2: areaM2 || 0,
+    plusvaliaInmediataSoles: 0,
     yearCompra: today.getFullYear(),
     monthCompra: today.getMonth() + 1,
     yearEntrega: today.getFullYear() + 2,
     monthEntrega: 12,
-    alquilerPorM2Mes: alquiler,
+    alquilerPorM2MesSoles: alquilerSoles,
     vacancia: { pesimista: 0.10, promedio: 0.08, optimista: 0.05 },
-    gastosOperativosUsd: {
-      pesimista: Math.round(priceUsd * 0.006),
-      promedio: Math.round(priceUsd * 0.004),
-      optimista: Math.round(priceUsd * 0.003),
+    gastosOperativosSoles: {
+      pesimista: Math.round(precioSoles * 0.006),
+      promedio: Math.round(precioSoles * 0.004),
+      optimista: Math.round(precioSoles * 0.003),
     },
     g: 0.05,
     n: 10,
     inflacion: 0.035,
-    tipoCambio: 3.5,
   };
 }
 
 function InvestmentCalculator({ district, priceUsd, areaM2 }) {
-  const [inputs, setInputs] = useState(() => defaultsFromDistrict(district, priceUsd));
+  const [inputs, setInputs] = useState(() =>
+    defaultsFromDistrict(district, priceUsd, areaM2)
+  );
   const [result, setResult] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  // Si el distrito o el precio cambian (ej. user revaluó), reseteamos defaults.
+  // Si el distrito/precio/área cambian (ej. user revaluó), reseteamos defaults.
   useEffect(() => {
-    setInputs(defaultsFromDistrict(district, priceUsd));
+    setInputs(defaultsFromDistrict(district, priceUsd, areaM2));
     setResult(null);
-  }, [district?.slug, priceUsd]);
+  }, [district?.slug, priceUsd, areaM2]);
 
   function setField(path, value) {
     setInputs((s) => {
@@ -519,21 +528,24 @@ function InvestmentCalculator({ district, priceUsd, areaM2 }) {
     setResult(null);
     setSubmitting(true);
     try {
+      // El usuario ingresa en S/.; el backend calcula en USD → convertimos.
+      const tc = TIPO_CAMBIO;
+      const usd = (soles) => (Number(soles) || 0) / tc;
       const res = await fetch("/api/calcular", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          priceUsd,
-          areaM2,
-          plusvaliaInmediataUsd: Number(inputs.plusvaliaInmediataUsd) || 0,
+          priceUsd: usd(inputs.precioSoles),
+          areaM2: Number(inputs.areaM2),
+          plusvaliaInmediataUsd: usd(inputs.plusvaliaInmediataSoles),
           yearCompra: Number(inputs.yearCompra),
           monthCompra: Number(inputs.monthCompra),
           yearEntrega: Number(inputs.yearEntrega),
           monthEntrega: Number(inputs.monthEntrega),
           alquilerPorM2Mes: {
-            pesimista: Number(inputs.alquilerPorM2Mes.pesimista),
-            promedio: Number(inputs.alquilerPorM2Mes.promedio),
-            optimista: Number(inputs.alquilerPorM2Mes.optimista),
+            pesimista: usd(inputs.alquilerPorM2MesSoles.pesimista),
+            promedio: usd(inputs.alquilerPorM2MesSoles.promedio),
+            optimista: usd(inputs.alquilerPorM2MesSoles.optimista),
           },
           vacancia: {
             pesimista: Number(inputs.vacancia.pesimista),
@@ -541,14 +553,14 @@ function InvestmentCalculator({ district, priceUsd, areaM2 }) {
             optimista: Number(inputs.vacancia.optimista),
           },
           gastosOperativosUsd: {
-            pesimista: Number(inputs.gastosOperativosUsd.pesimista),
-            promedio: Number(inputs.gastosOperativosUsd.promedio),
-            optimista: Number(inputs.gastosOperativosUsd.optimista),
+            pesimista: usd(inputs.gastosOperativosSoles.pesimista),
+            promedio: usd(inputs.gastosOperativosSoles.promedio),
+            optimista: usd(inputs.gastosOperativosSoles.optimista),
           },
           g: Number(inputs.g),
           n: Number(inputs.n),
           inflacion: Number(inputs.inflacion),
-          tipoCambio: Number(inputs.tipoCambio) || undefined,
+          tipoCambio: tc,
         }),
       });
       const data = await res.json();
@@ -574,26 +586,55 @@ function InvestmentCalculator({ district, priceUsd, areaM2 }) {
           Replica la calculadora del inversionista: rentas, plusvalía, inflación y ganancia real.
         </p>
         <p className="text-xs text-slate-500 mt-1">
-          Precio: ${fmt(priceUsd)} · {areaM2} m² · {district?.name || "—"}
+          {district?.name || "—"} · montos en soles (S/.) · TC referencial S/.{TIPO_CAMBIO}/USD
         </p>
       </div>
 
-      {/* Sección 1: datos del proyecto */}
-      <Section title="Proyecto y fechas">
+      {/* Datos de la propiedad */}
+      <Section title="Datos de la propiedad">
         <Field
-          label="Plusvalía inmediata a la entrega (USD)"
-          hint="Diferencia precio lista vs precio socio fundador. 0 si compras al precio público."
+          label="Área m² de la propiedad"
+          hint="Área techada de la unidad."
+        >
+          <input
+            type="number"
+            min="10"
+            max="5000"
+            value={inputs.areaM2}
+            onChange={(e) => setField("areaM2", e.target.value)}
+            className="input-sm"
+          />
+        </Field>
+        <Field
+          label="Precio de compra inversionista (S/.)"
+          hint="Precio de la propiedad en soles. Pre-llenado desde el valuador — ajústalo si tienes el real."
+        >
+          <input
+            type="number"
+            min="1000"
+            value={inputs.precioSoles}
+            onChange={(e) => setField("precioSoles", e.target.value)}
+            className="input-sm"
+          />
+        </Field>
+      </Section>
+
+      {/* Proyecto y fechas */}
+      <Section title="Entrega y compra">
+        <Field
+          label="Plusvalía inmediata a la entrega (S/.)"
+          hint="Diferencia entre el precio a la entrega y el precio que pagas (preventa / socio fundador). 0 si compras al precio público."
         >
           <input
             type="number"
             min="0"
-            value={inputs.plusvaliaInmediataUsd}
-            onChange={(e) => setField("plusvaliaInmediataUsd", e.target.value)}
+            value={inputs.plusvaliaInmediataSoles}
+            onChange={(e) => setField("plusvaliaInmediataSoles", e.target.value)}
             className="input-sm"
           />
         </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Año compra">
+          <Field label="Año de compra de la propiedad">
             <input
               type="number"
               min="2000"
@@ -603,7 +644,7 @@ function InvestmentCalculator({ district, priceUsd, areaM2 }) {
               className="input-sm"
             />
           </Field>
-          <Field label="Mes compra (1-12)">
+          <Field label="Mes de compra de la propiedad (1–12)">
             <input
               type="number"
               min="1"
@@ -613,7 +654,7 @@ function InvestmentCalculator({ district, priceUsd, areaM2 }) {
               className="input-sm"
             />
           </Field>
-          <Field label="Año entrega">
+          <Field label="Año de entrega de la propiedad">
             <input
               type="number"
               min="2000"
@@ -623,7 +664,7 @@ function InvestmentCalculator({ district, priceUsd, areaM2 }) {
               className="input-sm"
             />
           </Field>
-          <Field label="Mes entrega (1-12)">
+          <Field label="Mes de entrega de la propiedad (1–12)">
             <input
               type="number"
               min="1"
@@ -636,84 +677,77 @@ function InvestmentCalculator({ district, priceUsd, areaM2 }) {
         </div>
       </Section>
 
-      {/* Sección 2: alquiler */}
+      {/* Alquiler */}
       <Section
-        title="Alquiler esperado"
+        title="Ingresos por alquiler"
         hint={
           district?.stats?.median_price_usd_per_m2_alquiler
-            ? `Pre-llenado con p25/mediana/p75 reales de ${district.name}.`
-            : "Sin datos del distrito — defaults genéricos."
+            ? `Pre-llenado con datos reales de ${district.name} (convertidos a S/.).`
+            : "Sin datos del distrito — referencia genérica. Ajusta según tu mercado."
         }
       >
         <ScenarioRow
-          label="USD/m²/mes"
-          values={inputs.alquilerPorM2Mes}
-          onChange={(esc, val) => setField(`alquilerPorM2Mes.${esc}`, val)}
-          step="0.5"
+          label="Alquiler por m² / mes (S/.)"
+          values={inputs.alquilerPorM2MesSoles}
+          onChange={(esc, val) => setField(`alquilerPorM2MesSoles.${esc}`, val)}
+          step="1"
         />
         <ScenarioRow
-          label="Vacancia (decimal)"
+          label="Vacancia estimada (%)"
           values={inputs.vacancia}
           onChange={(esc, val) => setField(`vacancia.${esc}`, val)}
           step="0.01"
-          hint="0.10 = 10% (1.2 meses sin alquilar/año)"
+          hint="0.10 = 10% (≈1.2 meses sin alquilar al año)"
         />
         <ScenarioRow
-          label="Gastos operativos anuales (USD)"
-          values={inputs.gastosOperativosUsd}
-          onChange={(esc, val) => setField(`gastosOperativosUsd.${esc}`, val)}
+          label="Gastos operativos anuales (S/.)"
+          values={inputs.gastosOperativosSoles}
+          onChange={(esc, val) => setField(`gastosOperativosSoles.${esc}`, val)}
           step="50"
-          hint="Mantenimiento + impuestos + admin"
+          hint="Mantenimiento + impuestos + administración"
         />
       </Section>
 
       {/* Sección 3: supuestos */}
-      <Section title="Supuestos del inversionista">
-        <div className="grid grid-cols-3 gap-3">
-          <Field label="g (plusvalía/año)" hint="0.05 = 5%">
-            <input
-              type="number"
-              step="0.005"
-              min="-0.5"
-              max="1"
-              value={inputs.g}
-              onChange={(e) => setField("g", e.target.value)}
-              className="input-sm"
-            />
-          </Field>
-          <Field label="n (años)">
-            <input
-              type="number"
-              min="1"
-              max="50"
-              value={inputs.n}
-              onChange={(e) => setField("n", e.target.value)}
-              className="input-sm"
-            />
-          </Field>
-          <Field label="π (inflación)" hint="0.035 = 3.5%">
-            <input
-              type="number"
-              step="0.005"
-              min="0"
-              max="0.5"
-              value={inputs.inflacion}
-              onChange={(e) => setField("inflacion", e.target.value)}
-              className="input-sm"
-            />
-          </Field>
-        </div>
+      <Section title="Supuestos de la proyección">
         <Field
-          label="Tipo de cambio (S/. por USD)"
-          hint="Para mostrar también los montos en soles. Actualizar al TC del mes (BCRP/SBS)."
+          label="Cuánto sube de precio el inmueble cada año"
+          hint="Plusvalía anual estimada. Ej: 0.05 = sube 5% de valor por año (referencia conservadora)."
         >
           <input
             type="number"
-            step="0.01"
+            step="0.005"
+            min="-0.5"
+            max="1"
+            value={inputs.g}
+            onChange={(e) => setField("g", e.target.value)}
+            className="input-sm"
+          />
+        </Field>
+        <Field
+          label="Cuántos años vas a conservar la propiedad"
+          hint="Horizonte de la inversión, en años (incluye la preventa)."
+        >
+          <input
+            type="number"
             min="1"
-            max="10"
-            value={inputs.tipoCambio}
-            onChange={(e) => setField("tipoCambio", e.target.value)}
+            max="50"
+            value={inputs.n}
+            onChange={(e) => setField("n", e.target.value)}
+            className="input-sm"
+          />
+        </Field>
+        <Field
+          label="Inflación anual proyectada"
+          hint="Cuánto pierde valor el dinero por año. Ej: 0.035 = 3.5% (meta BCRP ~2–3%)."
+        >
+          <input
+            type="number"
+            step="0.005"
+            min="0"
+            max="0.5"
+            value={inputs.inflacion}
+            onChange={(e) => setField("inflacion", e.target.value)}
             className="input-sm"
           />
         </Field>
@@ -997,7 +1031,7 @@ function CagrHelper({ onUseG }) {
         onClick={() => setOpen((o) => !o)}
         className="text-sm font-medium text-slate-700"
       >
-        {open ? "▲ " : "▼ "}Calcular g desde el histórico de la zona (CAGR)
+        {open ? "▲ " : "▼ "}Calcular la plusvalía anual con el histórico de precios de la zona
       </button>
       {open && (
         <div className="mt-3 space-y-3">
@@ -1029,10 +1063,11 @@ function CagrHelper({ onUseG }) {
           {res?.ok && (
             <div className="text-sm text-slate-700 space-y-1">
               <p>
-                CAGR histórico: <b>{res.cagr_pct != null ? `${res.cagr_pct}%` : "sin dato propio"}</b>
+                Crecimiento anual histórico de la zona:{" "}
+                <b>{res.cagr_pct != null ? `${res.cagr_pct}%` : "sin dato propio"}</b>
               </p>
               <p>
-                g recomendada (conservadora): <b>{res.g_recomendada_pct}%</b>
+                Plusvalía anual recomendada (conservadora): <b>{res.g_recomendada_pct}%</b>
               </p>
               <p className="text-xs text-slate-500">{res.regla}</p>
               <button
@@ -1040,7 +1075,7 @@ function CagrHelper({ onUseG }) {
                 onClick={() => onUseG(res.g_recomendada)}
                 className="mt-1 bg-slate-900 text-white rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-slate-800"
               >
-                Usar {res.g_recomendada_pct}% como g
+                Usar {res.g_recomendada_pct}% como plusvalía anual
               </button>
             </div>
           )}
