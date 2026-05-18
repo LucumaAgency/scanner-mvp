@@ -34,9 +34,13 @@ const STEPS = [
   "precio",
   "entrega",
   "alquiler",
+  "preventa",
   "horizonte",
+  "supuestos",
   "resultado",
 ];
+
+const clamp01 = (n) => Math.min(0.95, Math.max(0, n));
 
 export default function VersionWizard() {
   const { districts, loading } = useDistricts();
@@ -51,6 +55,11 @@ export default function VersionWizard() {
     monthEntrega: 12,
     alquilerUsdM2Mes: "",
     n: 10,
+    // Avanzados (sliders, con defaults conservadores).
+    plusInmediataPct: 0, // descuento de preventa, % del precio
+    gPct: 5, // plusvalía anual esperada, %
+    inflPct: 3.5, // inflación anual esperada, %
+    vacMeses: 1, // meses al año que esperás que esté vacía
   });
   const [result, setResult] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -84,19 +93,30 @@ export default function VersionWizard() {
       const today = new Date();
       const defaults = buildDefaults(district, Number(data.priceUsd), Number(data.areaM2));
       const med = Number(suggestedAlquiler);
+      const price = Number(data.priceUsd);
+      const vP = Number(data.vacMeses);
       const payload = {
         ...defaults,
-        priceUsd: Number(data.priceUsd),
+        priceUsd: price,
         areaM2: Number(data.areaM2),
         yearCompra: today.getFullYear(),
         monthCompra: today.getMonth() + 1,
         yearEntrega: Number(data.yearEntrega),
         monthEntrega: Number(data.monthEntrega),
         n: Number(data.n),
+        // Avanzados v8.0 capturados con sliders.
+        plusvaliaInmediataUsd: round((price * Number(data.plusInmediataPct)) / 100, 0),
+        g: Number(data.gPct) / 100,
+        inflacion: Number(data.inflPct) / 100,
         alquilerPorM2Mes: {
           pesimista: round(med * 0.85, 1),
           promedio: med,
           optimista: round(med * 1.15, 1),
+        },
+        vacancia: {
+          pesimista: clamp01((vP + 1.2) / 12),
+          promedio: clamp01(vP / 12),
+          optimista: clamp01(Math.max(vP - 0.6, 0) / 12),
         },
       };
       const res = await calcular(payload);
@@ -315,32 +335,93 @@ export default function VersionWizard() {
           </Step>
         )}
 
+        {currentStep === "preventa" && (
+          <Step
+            question="¿Compraste con descuento de preventa?"
+            help="Si pagas menos que el precio de lista (preventa, socio fundador), esa diferencia es ganancia desde el día 1. Mueve el slider al % de descuento. Déjalo en 0 si compras al precio público."
+            canNext={true}
+            onNext={next}
+            onBack={back}
+          >
+            <SliderField
+              value={data.plusInmediataPct}
+              min={0}
+              max={20}
+              step={1}
+              onChange={(v) => set("plusInmediataPct", v)}
+              display={`${data.plusInmediataPct}%`}
+              caption={
+                Number(data.priceUsd) > 0
+                  ? `≈ $${fmt((Number(data.priceUsd) * Number(data.plusInmediataPct)) / 100)} de ganancia al recibir la propiedad`
+                  : "% del precio de la propiedad"
+              }
+            />
+          </Step>
+        )}
+
         {currentStep === "horizonte" && (
           <Step
             question="¿Cuántos años piensas tenerla?"
             help="El horizonte de tu inversión. La mayoría de inversores planea 10 años."
+            canNext={true}
+            onNext={next}
+            onBack={back}
+          >
+            <SliderField
+              value={data.n}
+              min={3}
+              max={20}
+              step={1}
+              onChange={(v) => set("n", v)}
+              display={`${data.n} años`}
+              caption={`Te entregan en ${Number(data.yearEntrega)}, vendes en ${
+                Number(data.yearEntrega) + Number(data.n)
+              }`}
+            />
+          </Step>
+        )}
+
+        {currentStep === "supuestos" && (
+          <Step
+            question="Últimos ajustes (ya pusimos valores seguros)"
+            help="Estos son los supuestos del análisis. Dejamos valores conservadores; muévelos solo si quieres afinar."
             canNext={true}
             onNext={calculate}
             onBack={back}
             nextLabel={submitting ? "Calculando..." : "Ver mi inversión"}
             nextDisabled={submitting}
           >
-            <div className="space-y-3">
-              <input
-                type="range"
-                min="3"
-                max="20"
-                value={data.n}
-                onChange={(e) => set("n", e.target.value)}
-                className="w-full accent-emerald-400"
+            <div className="space-y-6">
+              <SliderField
+                label="¿Cuánto crees que subirá de precio cada año?"
+                value={data.gPct}
+                min={0}
+                max={12}
+                step={0.5}
+                onChange={(v) => set("gPct", v)}
+                display={`${data.gPct}%`}
+                caption="Plusvalía anual del inmueble. Referencia conservadora: 5%."
               />
-              <div className="text-center">
-                <span className="text-3xl font-bold text-white">{data.n}</span>
-                <span className="text-sm text-slate-400 ml-1">años</span>
-              </div>
-              <p className="text-center text-xs text-slate-500">
-                Te entregan en {Number(data.yearEntrega)}, vendes en {Number(data.yearEntrega) + Number(data.n)}
-              </p>
+              <SliderField
+                label="¿Cuánta inflación esperas al año?"
+                value={data.inflPct}
+                min={1}
+                max={8}
+                step={0.5}
+                onChange={(v) => set("inflPct", v)}
+                display={`${data.inflPct}%`}
+                caption="Cuánto pierde valor el dinero al año. Meta BCRP ~2–3%."
+              />
+              <SliderField
+                label="¿Cuántos meses al año esperas que esté vacía?"
+                value={data.vacMeses}
+                min={0}
+                max={4}
+                step={0.5}
+                onChange={(v) => set("vacMeses", v)}
+                display={`${data.vacMeses} ${Number(data.vacMeses) === 1 ? "mes" : "meses"}`}
+                caption={`Vacancia ≈ ${Math.round((Number(data.vacMeses) / 12) * 100)}% del año sin alquilar.`}
+              />
             </div>
             {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
           </Step>
@@ -572,10 +653,36 @@ function ProgressBar({ step, total }) {
   );
 }
 
+function SliderField({ label, value, min, max, step = 1, onChange, display, caption }) {
+  return (
+    <div className="space-y-3">
+      {label && <p className="text-sm font-medium text-white">{label}</p>}
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full accent-emerald-400"
+      />
+      <div className="flex justify-between text-[10px] text-slate-500">
+        <span>{min}</span>
+        <span>{max}</span>
+      </div>
+      <div className="text-center">
+        <span className="text-3xl font-bold text-white">{display}</span>
+      </div>
+      {caption && <p className="text-center text-xs text-slate-400">{caption}</p>}
+    </div>
+  );
+}
+
 function ResultWizard({ result, district, onReset }) {
-  const { proyeccion, verdict, verdict_tone } = result;
+  const { proyeccion, verdict, verdict_tone, soles } = result;
   const verdictMap = {
     GANANCIA_REAL: "🟢 Esta inversión te haría ganar dinero real",
+    NEUTRO: "🟡 Empatas con la inflación: ni ganas ni pierdes en términos reales",
     GANANCIA_NOMINAL: "🟡 Ganarías USD pero perderías contra la inflación",
     PERDIDA_REAL: "🔴 Esta inversión perdería valor real",
   };
@@ -622,14 +729,59 @@ function ResultWizard({ result, district, onReset }) {
       <details className="text-sm text-slate-400">
         <summary className="cursor-pointer font-medium hover:text-white">Ver el detalle</summary>
         <div className="mt-3 space-y-1 text-slate-400">
+          {proyeccion.plusvalia_inmediata_usd > 0 && (
+            <p>
+              Ganancia inmediata por preventa:{" "}
+              <strong className="text-white">
+                +${fmt(proyeccion.plusvalia_inmediata_usd)} ({proyeccion.plusvalia_inmediata_pct}%)
+              </strong>
+            </p>
+          )}
           <p>Valor de la propiedad al final: <strong className="text-white">${fmt(proyeccion.valor_final_usd)}</strong></p>
           <p>Plusvalía acumulada: <strong className="text-white">{proyeccion.plusvalia_acum_pct}%</strong> (+${fmt(proyeccion.plusvalia_usd)})</p>
           <p>Total cobrado en alquileres: <strong className="text-white">${fmt(proyeccion.renta_acum_usd)}</strong></p>
           <p>Inflación acumulada: <strong className="text-white">{proyeccion.inflacion_acum_pct}%</strong></p>
-          <p className="text-xs text-slate-500 mt-2">
-            Asumimos vacancia 8%, gastos operativos 0.4% anual, plusvalía proyectada 5% anual e inflación 3%.
-          </p>
+          {soles && (
+            <p className="text-slate-300">
+              En soles · total obtenido <strong className="text-white">S/.{fmt(soles.valor_total_obtenido)}</strong> ·
+              ganancia real <strong className="text-white">S/.{fmt(soles.ganancia_real)}</strong>
+            </p>
+          )}
         </div>
+
+        {Array.isArray(result.proyeccion_anual) && result.proyeccion_anual.length > 0 && (
+          <div className="mt-4 overflow-x-auto">
+            <p className="text-xs font-medium text-slate-300 mb-2">Año a año</p>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-slate-500 uppercase text-left">
+                  <th className="font-medium pb-1">Año</th>
+                  <th className="font-medium pb-1 text-right">Valor inmueble</th>
+                  <th className="font-medium pb-1 text-right">Renta neta</th>
+                  <th className="font-medium pb-1 text-right">Rent. total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {result.proyeccion_anual.map((f) => (
+                  <tr key={f.anio} className="border-t border-white/5">
+                    <td className="py-1 text-slate-400">{f.anio}</td>
+                    <td className="py-1 text-right text-slate-300">${fmt(f.valor_inmueble_usd)}</td>
+                    <td className="py-1 text-right text-slate-300">${fmt(f.renta_anual_neta_usd)}</td>
+                    <td
+                      className={`py-1 text-right font-medium ${
+                        f.rentabilidad_total_pct >= f.inflacion_acum_pct
+                          ? "text-emerald-400"
+                          : "text-rose-400"
+                      }`}
+                    >
+                      {f.rentabilidad_total_pct}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </details>
 
       <button
