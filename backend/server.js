@@ -17,7 +17,7 @@ import { parseCopiaLiteral } from "./copiaLiteral.js";
 // /api/copia-literal responde 503 y el resto de la plataforma funciona normal.
 let _upload;
 async function getUpload() {
-  if (_upload !== undefined) return _upload;
+  if (_upload) return _upload; // solo se cachea el éxito
   try {
     const multer = (await import("multer")).default;
     _upload = multer({
@@ -25,8 +25,9 @@ async function getUpload() {
       limits: { fileSize: 15 * 1024 * 1024, files: 1 },
     });
   } catch (e) {
+    // No se cachea el fallo: si luego instalas la dep, funciona sin reiniciar.
     console.error("multer no disponible:", e?.message);
-    _upload = null;
+    return null;
   }
   return _upload;
 }
