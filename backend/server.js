@@ -11,14 +11,25 @@ import {
   validateTasaGInput,
 } from "./calculator.js";
 import { parseCopiaLiteral } from "./copiaLiteral.js";
-import { ocrPdfBuffer, OcrUnavailableError } from "./ocr.js";
-import multer from "multer";
 
-// El PDF se procesa en memoria y se descarta — nunca toca disco.
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 15 * 1024 * 1024, files: 1 },
-});
+// multer y el motor OCR son OPCIONALES: se cargan de forma perezosa para que
+// el servidor arranque aunque esas dependencias no estén instaladas. Si faltan,
+// /api/copia-literal responde 503 y el resto de la plataforma funciona normal.
+let _upload;
+async function getUpload() {
+  if (_upload !== undefined) return _upload;
+  try {
+    const multer = (await import("multer")).default;
+    _upload = multer({
+      storage: multer.memoryStorage(),
+      limits: { fileSize: 15 * 1024 * 1024, files: 1 },
+    });
+  } catch (e) {
+    console.error("multer no disponible:", e?.message);
+    _upload = null;
+  }
+  return _upload;
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -119,7 +130,15 @@ app.post("/api/tasa-g", (req, res) => {
 // Subida OPCIONAL de la copia literal de SUNARP. El usuario ya llenó los datos
 // a mano; esto solo agrega precisión a la plusvalía (g) leyendo el historial
 // de transferencias. El PDF se procesa en RAM y se descarta; no se guarda PII.
-app.post("/api/copia-literal", (req, res) => {
+app.post("/api/copia-literal", async (req, res) => {
+  const upload = await getUpload();
+  if (!upload) {
+    return res.status(503).json({
+      ok: false,
+      error:
+        "La lectura automática no está disponible en el servidor. Continúa ingresando la plusvalía a mano.",
+    });
+  }
   upload.single("file")(req, res, async (mErr) => {
     if (mErr) {
       const msg =
@@ -141,6 +160,7 @@ app.post("/api/copia-literal", (req, res) => {
 
     let buffer = file.buffer;
     try {
+      const { ocrPdfBuffer } = await import("./ocr.js");
       const { text, pages } = await ocrPdfBuffer(buffer);
       const datos = parseCopiaLiteral(text);
 
@@ -158,7 +178,7 @@ app.post("/api/copia-literal", (req, res) => {
 
       res.json({ ...datos, paginas_ocr: pages, g_sugerida });
     } catch (e) {
-      if (e instanceof OcrUnavailableError) {
+      if (e?.name === "OcrUnavailableError") {
         console.error("[/api/copia-literal] OCR no disponible:", e.message);
         return res.status(503).json({
           ok: false,

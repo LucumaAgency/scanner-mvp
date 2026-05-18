@@ -14,14 +14,11 @@
     "test": "node --test backend/*.test.js"
   },
   "dependencies": {
-    "@napi-rs/canvas": "^0.1.58",
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
-    "mongodb": "^6.10.0",
-    "multer": "^1.4.5-lts.1",
-    "pdfjs-dist": "^4.7.76",
-    "tesseract.js": "^5.1.1"
+    "mongodb": "^6.10.0"
   },
+  "comment_optionalDependencies": "Para activar la lectura de copia literal, instalar en el servidor: npm i multer pdfjs-dist @napi-rs/canvas tesseract.js  (son opcionales; sin ellas /api/copia-literal responde 503 y el resto funciona).",
   "engines": {
     "node": ">=20"
   }
