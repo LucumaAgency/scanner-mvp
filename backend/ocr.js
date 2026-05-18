@@ -8,8 +8,10 @@
  * Si alguna pieza no está disponible, lanza OcrUnavailableError.
  */
 
-// pdfjs-dist v4 usa Promise.withResolvers() (Node 22+). El server corre
-// Node 21.7.3 → polyfill obligatorio ANTES de importar pdfjs.
+// pdfjs-dist v4 usa APIs de Node 22+ que el server (Node 21.7.3) no tiene.
+// Polyfills obligatorios ANTES de importar pdfjs:
+import { createRequire } from "node:module";
+
 if (typeof Promise.withResolvers !== "function") {
   Promise.withResolvers = function withResolvers() {
     let resolve, reject;
@@ -18,6 +20,19 @@ if (typeof Promise.withResolvers !== "function") {
       reject = rej;
     });
     return { promise, resolve, reject };
+  };
+}
+
+// process.getBuiltinModule(id): añadido en Node 22.3 — equivale a require(id)
+// para módulos nativos.
+if (typeof process.getBuiltinModule !== "function") {
+  const _req = createRequire(import.meta.url);
+  process.getBuiltinModule = (id) => {
+    try {
+      return _req(id);
+    } catch {
+      return _req(String(id).replace(/^node:/, ""));
+    }
   };
 }
 
