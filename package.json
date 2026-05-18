@@ -10,7 +10,8 @@
     "install:frontend": "npm install --prefix frontend",
     "build:frontend": "npm run build --prefix frontend",
     "dev:backend": "node --watch backend/server.js",
-    "dev:frontend": "npm run dev --prefix frontend"
+    "dev:frontend": "npm run dev --prefix frontend",
+    "test": "node --test backend/*.test.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

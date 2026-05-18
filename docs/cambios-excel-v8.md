@@ -160,6 +160,11 @@ ganancia real S/.151,378 — coinciden exactamente.
   `tipoCambio: 3.5`, `inflacion: 0.035` (las 3 versiones alternativas siguen
   funcionando por compatibilidad; el render extendido se agregó solo a la ruta `/`).
 
+Tests unitarios (`backend/calculator.test.js`, `npm test`): 12 casos que
+congelan la equivalencia con el Excel — caso base v8.0, inflación BCRP
+(compra 2026 / 2018 / futura), los 3 veredictos, no-regresión de
+`GANANCIA_NOMINAL`, proyección año a año, flags benchmark, bloque soles,
+las 5 ramas de `tasaGRecomendada()` y la validación. ✅ 12/12.
+
 Pendiente (no bloqueante): replicar la tabla año-a-año y los nuevos campos en las
-3 versiones alternativas de UX (`VersionWizard/Cards/Story`), y tests unitarios
-de `inflacionAcumulada()` / `tasaGRecomendada()`.
+3 versiones alternativas de UX (`VersionWizard/Cards/Story`).
