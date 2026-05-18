@@ -1004,7 +1004,32 @@ function CagrHelper({ onUseG }) {
   });
   const [res, setRes] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [copia, setCopia] = useState(null);
+  const [copiaErr, setCopiaErr] = useState("");
+  const [copiaLoading, setCopiaLoading] = useState(false);
   const upd = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
+
+  async function subirCopia(file) {
+    if (!file) return;
+    setCopiaErr("");
+    setCopia(null);
+    setCopiaLoading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetch("/api/copia-literal", { method: "POST", body: fd });
+      const d = await r.json();
+      if (!r.ok || d.ok === false) {
+        setCopiaErr(d.error || "No se pudo leer el PDF.");
+      } else {
+        setCopia(d);
+      }
+    } catch {
+      setCopiaErr("No se pudo subir el archivo. Continúa a mano.");
+    } finally {
+      setCopiaLoading(false);
+    }
+  }
 
   async function calc() {
     setLoading(true);
@@ -1034,6 +1059,86 @@ function CagrHelper({ onUseG }) {
       </button>
       {open && (
         <div className="mt-3 space-y-3">
+          {/* Vía rápida: subir la copia literal (opcional). El PDF no se guarda. */}
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
+            <p className="text-sm font-medium text-slate-800">
+              ¿Tienes la copia literal de SUNARP?
+            </p>
+            <p className="text-xs text-slate-500 mt-0.5 mb-2">
+              Súbela y leemos el historial de compraventas para calcular la plusvalía
+              real. El PDF se procesa al instante y no se guarda.
+            </p>
+            <input
+              type="file"
+              accept="application/pdf,.pdf"
+              onChange={(e) => subirCopia(e.target.files?.[0])}
+              disabled={copiaLoading}
+              className="block w-full text-xs text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-white file:text-xs disabled:opacity-60"
+            />
+            {copiaLoading && (
+              <p className="text-xs text-slate-500 mt-2">Leyendo el PDF… puede tardar unos segundos.</p>
+            )}
+            {copiaErr && <p className="text-xs text-amber-700 mt-2">{copiaErr}</p>}
+            {copia && (
+              <div className="mt-3 text-sm text-slate-700 space-y-1">
+                {copia.partida && (
+                  <p className="text-xs text-slate-500">
+                    Partida {copia.partida}
+                    {copia.oficina_registral ? ` · ${copia.oficina_registral}` : ""}
+                    {copia.vigente === false ? " · ⚠ copia con más de 90 días" : ""}
+                  </p>
+                )}
+                {copia.cargas_gravamenes?.tiene_cargas && (
+                  <p className="text-xs text-rose-700 font-medium">
+                    ⚠ Tiene cargas/gravámenes inscritos
+                    {copia.cargas_gravamenes.tipos?.length
+                      ? ` (${copia.cargas_gravamenes.tipos.join(", ")})`
+                      : ""}{" "}
+                    — tenlo en cuenta en la decisión.
+                  </p>
+                )}
+                {copia.cagr?.ok ? (
+                  <>
+                    <p>
+                      Plusvalía histórica:{" "}
+                      <b>{copia.cagr.cagr_pct}% anual</b> (S/.{fmt(copia.cagr.precio_inicial)}{" "}
+                      en {copia.cagr.anio_inicial} → S/.{fmt(copia.cagr.precio_final)} en{" "}
+                      {copia.cagr.anio_final})
+                    </p>
+                    {copia.g_sugerida?.ok && (
+                      <>
+                        <p>
+                          Plusvalía anual recomendada (conservadora):{" "}
+                          <b>{copia.g_sugerida.g_recomendada_pct}%</b>
+                        </p>
+                        <p className="text-xs text-slate-500">{copia.g_sugerida.regla}</p>
+                        <button
+                          type="button"
+                          onClick={() => onUseG(copia.g_sugerida.g_recomendada)}
+                          className="mt-1 bg-slate-900 text-white rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-slate-800"
+                        >
+                          Usar {copia.g_sugerida.g_recomendada_pct}% como plusvalía anual
+                        </button>
+                      </>
+                    )}
+                    {!copia.cagr.confiable && (
+                      <p className="text-xs text-amber-700">{copia.cagr.nota}</p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-xs text-slate-500">
+                    No encontramos 2 compraventas con monto en la partida — usa el cálculo
+                    manual de abajo o deja la plusvalía por defecto.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <p className="text-xs text-slate-400 text-center">
+            — o calcúlala a mano con dos precios —
+          </p>
+
           <div className="grid grid-cols-2 gap-2">
             <Field label="Ubicación">
               <input value={f.ubicacion} onChange={upd("ubicacion")} className="input-sm" placeholder="Lima / provincia" />

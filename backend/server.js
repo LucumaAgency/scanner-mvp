@@ -10,6 +10,15 @@ import {
   tasaGRecomendada,
   validateTasaGInput,
 } from "./calculator.js";
+import { parseCopiaLiteral } from "./copiaLiteral.js";
+import { ocrPdfBuffer, OcrUnavailableError } from "./ocr.js";
+import multer from "multer";
+
+// El PDF se procesa en memoria y se descarta — nunca toca disco.
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024, files: 1 },
+});
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -105,6 +114,66 @@ app.post("/api/tasa-g", (req, res) => {
     console.error("[/api/tasa-g]", e);
     res.status(500).json({ error: "internal" });
   }
+});
+
+// Subida OPCIONAL de la copia literal de SUNARP. El usuario ya llenó los datos
+// a mano; esto solo agrega precisión a la plusvalía (g) leyendo el historial
+// de transferencias. El PDF se procesa en RAM y se descarta; no se guarda PII.
+app.post("/api/copia-literal", (req, res) => {
+  upload.single("file")(req, res, async (mErr) => {
+    if (mErr) {
+      const msg =
+        mErr.code === "LIMIT_FILE_SIZE"
+          ? "El archivo supera 15 MB."
+          : "No se pudo recibir el archivo.";
+      return res.status(400).json({ ok: false, error: msg });
+    }
+    const file = req.file;
+    if (!file || !file.buffer?.length) {
+      return res.status(400).json({ ok: false, error: "Adjunta el PDF en el campo 'file'." });
+    }
+    const esPdf =
+      file.mimetype === "application/pdf" ||
+      /\.pdf$/i.test(file.originalname || "");
+    if (!esPdf) {
+      return res.status(400).json({ ok: false, error: "Solo se acepta un PDF de copia literal." });
+    }
+
+    let buffer = file.buffer;
+    try {
+      const { text, pages } = await ocrPdfBuffer(buffer);
+      const datos = parseCopiaLiteral(text);
+
+      // Sugerencia de g desde el CAGR (regla Lima/provincia ya existente).
+      let g_sugerida = null;
+      if (datos.cagr?.ok) {
+        g_sugerida = tasaGRecomendada({
+          ubicacion: datos.es_lima ? "Lima" : datos.oficina_registral || "provincia",
+          anioInicial: datos.cagr.anio_inicial,
+          precioInicial: datos.cagr.precio_inicial,
+          anioActual: datos.cagr.anio_final,
+          precioActual: datos.cagr.precio_final,
+        });
+      }
+
+      res.json({ ...datos, paginas_ocr: pages, g_sugerida });
+    } catch (e) {
+      if (e instanceof OcrUnavailableError) {
+        console.error("[/api/copia-literal] OCR no disponible:", e.message);
+        return res.status(503).json({
+          ok: false,
+          error:
+            "No pudimos leer el PDF automáticamente. Continúa ingresando la plusvalía a mano.",
+        });
+      }
+      console.error("[/api/copia-literal]", e);
+      return res.status(500).json({ ok: false, error: "internal" });
+    } finally {
+      // Descarta el PDF de memoria explícitamente.
+      buffer = null;
+      if (req.file) req.file.buffer = null;
+    }
+  });
 });
 
 const STATIC_DIR = path.resolve(__dirname, "../frontend/dist");

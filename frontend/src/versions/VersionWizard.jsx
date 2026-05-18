@@ -392,6 +392,7 @@ export default function VersionWizard() {
             nextDisabled={submitting}
           >
             <div className="space-y-6">
+              <CopiaUploadNight onG={(pct) => set("gPct", pct)} />
               <SliderField
                 label="¿Cuánto crees que subirá de precio cada año?"
                 value={data.gPct}
@@ -649,6 +650,70 @@ function ProgressBar({ step, total }) {
           style={{ width: `${pct}%` }}
         />
       </div>
+    </div>
+  );
+}
+
+// Subida opcional de la copia literal en el wizard. El PDF no se guarda.
+function CopiaUploadNight({ onG }) {
+  const [state, setState] = useState(null); // {loading|error|data}
+  async function up(file) {
+    if (!file) return;
+    setState({ loading: true });
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetch("/api/copia-literal", { method: "POST", body: fd });
+      const d = await r.json();
+      if (!r.ok || d.ok === false) setState({ error: d.error || "No se pudo leer el PDF." });
+      else setState({ data: d });
+    } catch {
+      setState({ error: "No se pudo subir. Continúa con los sliders." });
+    }
+  }
+  const d = state?.data;
+  return (
+    <div className="rounded-xl border border-emerald-400/30 bg-emerald-400/5 p-4">
+      <p className="text-sm font-medium text-white">¿Tienes la copia literal de SUNARP?</p>
+      <p className="text-xs text-slate-400 mt-0.5 mb-2">
+        Súbela y calculamos la plusvalía real desde su historial. No se guarda el PDF.
+      </p>
+      <input
+        type="file"
+        accept="application/pdf,.pdf"
+        onChange={(e) => up(e.target.files?.[0])}
+        disabled={state?.loading}
+        className="block w-full text-xs text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-emerald-400 file:px-3 file:py-1.5 file:text-slate-900 file:text-xs file:font-semibold disabled:opacity-60"
+      />
+      {state?.loading && <p className="text-xs text-slate-400 mt-2">Leyendo el PDF…</p>}
+      {state?.error && <p className="text-xs text-amber-300 mt-2">{state.error}</p>}
+      {d && (
+        <div className="mt-3 text-sm text-slate-300 space-y-1">
+          {d.cargas_gravamenes?.tiene_cargas && (
+            <p className="text-xs text-rose-300 font-medium">⚠ Tiene cargas/gravámenes inscritos.</p>
+          )}
+          {d.cagr?.ok && d.g_sugerida?.ok ? (
+            <>
+              <p>
+                Plusvalía histórica <b className="text-white">{d.cagr.cagr_pct}%</b> ·
+                recomendada <b className="text-white">{d.g_sugerida.g_recomendada_pct}%</b>
+              </p>
+              <button
+                type="button"
+                onClick={() => onG(d.g_sugerida.g_recomendada_pct)}
+                className="mt-1 bg-emerald-400 text-slate-900 rounded-lg px-3 py-1.5 text-xs font-semibold hover:bg-emerald-300"
+              >
+                Usar {d.g_sugerida.g_recomendada_pct}% de plusvalía
+              </button>
+              {!d.cagr.confiable && <p className="text-xs text-amber-300">{d.cagr.nota}</p>}
+            </>
+          ) : (
+            <p className="text-xs text-slate-400">
+              No encontramos 2 compraventas con monto — usa el slider de abajo.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
