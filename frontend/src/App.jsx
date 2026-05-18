@@ -1007,6 +1007,13 @@ function CagrHelper({ onUseG }) {
   const [copia, setCopia] = useState(null);
   const [copiaErr, setCopiaErr] = useState("");
   const [copiaLoading, setCopiaLoading] = useState(false);
+  const [appliedPct, setAppliedPct] = useState(null);
+
+  // Aplica la plusvalía al campo "g" del análisis y confirma en pantalla.
+  function aplicarG(decimal, pct) {
+    onUseG(decimal);
+    setAppliedPct(pct);
+  }
   const upd = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
 
   async function subirCopia(file) {
@@ -1059,6 +1066,13 @@ function CagrHelper({ onUseG }) {
       </button>
       {open && (
         <div className="mt-3 space-y-3">
+          {appliedPct != null && (
+            <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">
+              ✓ Listo: la plusvalía anual del análisis quedó en <b>{appliedPct}%</b>.
+              Cierra este panel y pulsa <b>“Calcular inversión”</b> para ver el
+              resultado con ese valor.
+            </div>
+          )}
           {/* Vía rápida: subir la copia literal (opcional). El PDF no se guarda. */}
           <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
             <p className="text-sm font-medium text-slate-800">
@@ -1114,10 +1128,15 @@ function CagrHelper({ onUseG }) {
                         <p className="text-xs text-slate-500">{copia.g_sugerida.regla}</p>
                         <button
                           type="button"
-                          onClick={() => onUseG(copia.g_sugerida.g_recomendada)}
+                          onClick={() =>
+                            aplicarG(
+                              copia.g_sugerida.g_recomendada,
+                              copia.g_sugerida.g_recomendada_pct
+                            )
+                          }
                           className="mt-1 bg-slate-900 text-white rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-slate-800"
                         >
-                          Usar {copia.g_sugerida.g_recomendada_pct}% como plusvalía anual
+                          Poner {copia.g_sugerida.g_recomendada_pct}% en el análisis
                         </button>
                       </>
                     )}
@@ -1176,10 +1195,10 @@ function CagrHelper({ onUseG }) {
               <p className="text-xs text-slate-500">{res.regla}</p>
               <button
                 type="button"
-                onClick={() => onUseG(res.g_recomendada)}
+                onClick={() => aplicarG(res.g_recomendada, res.g_recomendada_pct)}
                 className="mt-1 bg-slate-900 text-white rounded-lg px-3 py-1.5 text-xs font-medium hover:bg-slate-800"
               >
-                Usar {res.g_recomendada_pct}% como plusvalía anual
+                Poner {res.g_recomendada_pct}% en el análisis
               </button>
             </div>
           )}
