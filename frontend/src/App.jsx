@@ -313,21 +313,30 @@ function ResultCard({ result }) {
 
   const verdictMeta = {
     BAJO_MERCADO: {
-      label: "Bajo mercado",
+      label: "Está más barato que la zona",
       tone: "emerald",
-      hint: "Posible oportunidad — o aviso poco confiable.",
+      hint: "Cuesta menos que la mayoría de propiedades parecidas del distrito. Puede ser una buena oportunidad — verifica que el aviso sea confiable.",
     },
     DENTRO_RANGO: {
-      label: "Dentro del rango",
+      label: "Es un precio justo",
       tone: "slate",
-      hint: "Precio alineado con comparables.",
+      hint: "Está en línea con lo que cuestan propiedades parecidas en el mismo distrito.",
     },
     SOBRE_MERCADO: {
-      label: "Sobre mercado",
+      label: "Está más caro que la zona",
       tone: "rose",
-      hint: "Más caro que la mayoría de comparables.",
+      hint: "Cuesta más que la mayoría de propiedades parecidas del distrito. Hay margen para negociar el precio.",
     },
   }[verdict];
+
+  // Frase clara para la diferencia vs el precio típico (mediana).
+  const absDiff = Math.abs(diff_pct);
+  const diffText =
+    diff_pct > 0
+      ? `${absDiff}% más caro que lo normal en la zona`
+      : diff_pct < 0
+      ? `${absDiff}% más barato que lo normal en la zona`
+      : "igual al precio normal de la zona";
 
   const toneMap = {
     emerald: "bg-emerald-50 border-emerald-200 text-emerald-900",
@@ -341,21 +350,27 @@ function ResultCard({ result }) {
   if (!result.has_price) {
     return (
       <div className="mt-6 bg-white rounded-xl border border-slate-200 p-5 text-sm">
+        <p className="text-slate-500 mb-1">
+          Precios {opLabel === "alquiler" ? "de alquiler" : "de venta"} en{" "}
+          <span className="font-medium text-slate-900">{result.district}</span>
+        </p>
         <p className="text-slate-500 mb-3">
-          Precio por m² en {result.district} ·{" "}
-          <span className="font-medium text-slate-900">{opLabel}</span>
+          Esto es lo que cuestan propiedades parecidas a la tuya, por m²:
         </p>
         <div className="grid grid-cols-3 gap-2 text-center">
-          <Stat label="P25" value={`$${fmt(market.p25)}`} />
-          <Stat label="Mediana" value={`$${fmt(market.p50)}`} highlight />
-          <Stat label="P75" value={`$${fmt(market.p75)}`} />
+          <Stat label="Las más baratas" value={`$${fmt(market.p25)}/m²`} />
+          <Stat label="Lo más común" value={`$${fmt(market.p50)}/m²`} highlight />
+          <Stat label="Las más caras" value={`$${fmt(market.p75)}/m²`} />
         </div>
-        <p className="text-xs text-slate-500 mt-4">
-          {n_comps} comparables ·{" "}
-          {strategy === "similares" ? "área y dorms similares" : "distrito completo (pocas similares)"}
+        <p className="text-sm text-emerald-700 font-medium mt-4">
+          Calculado con {n_comps}{" "}
+          {strategy === "similares"
+            ? "propiedades de área y dormitorios similares"
+            : "propiedades del distrito (había pocas del mismo tamaño)"}
+          .
         </p>
         <p className="text-xs text-slate-500 mt-2">
-          Ingresa un precio arriba para obtener un veredicto (bajo / dentro / sobre mercado).
+          Ingresa un precio arriba y te decimos si está caro o barato para la zona.
         </p>
       </div>
     );
@@ -364,32 +379,33 @@ function ResultCard({ result }) {
   return (
     <div className="mt-6 space-y-4">
       <div className={`rounded-xl border p-5 ${toneMap[verdictMeta.tone]}`}>
-        <div className="flex items-baseline justify-between">
-          <p className="text-sm font-medium uppercase tracking-wide opacity-70">
-            Veredicto · {opLabel}
-          </p>
-          <p className="text-sm font-semibold">
-            {diff_pct >= 0 ? "+" : ""}
-            {diff_pct}% vs mediana
-          </p>
-        </div>
+        <p className="text-xs font-medium uppercase tracking-wide opacity-70">
+          {opLabel === "alquiler" ? "En alquiler" : "En venta"} · {result.district}
+        </p>
         <p className="text-xl font-semibold mt-1">{verdictMeta.label}</p>
-        <p className="text-sm mt-1 opacity-80">{verdictMeta.hint}</p>
+        <p className="text-sm font-medium mt-1">{diffText}</p>
+        <p className="text-sm mt-2 opacity-80">{verdictMeta.hint}</p>
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 p-5 text-sm">
+        <p className="text-slate-500 mb-1">
+          El precio de esta propiedad es{" "}
+          <span className="font-medium text-slate-900">${fmt(input.price_usd_per_m2)} por m²</span>
+        </p>
         <p className="text-slate-500 mb-3">
-          Tu propiedad:{" "}
-          <span className="font-medium text-slate-900">${fmt(input.price_usd_per_m2)}/m²</span>
+          Así se compara con propiedades parecidas en {result.district}:
         </p>
         <div className="grid grid-cols-3 gap-2 text-center">
-          <Stat label="P25" value={`$${fmt(market.p25)}`} />
-          <Stat label="Mediana" value={`$${fmt(market.p50)}`} highlight />
-          <Stat label="P75" value={`$${fmt(market.p75)}`} />
+          <Stat label="Las más baratas" value={`$${fmt(market.p25)}/m²`} />
+          <Stat label="Lo más común" value={`$${fmt(market.p50)}/m²`} highlight />
+          <Stat label="Las más caras" value={`$${fmt(market.p75)}/m²`} />
         </div>
-        <p className="text-xs text-slate-500 mt-4">
-          {n_comps} comparables ·{" "}
-          {strategy === "similares" ? "área y dorms similares" : "distrito completo (pocas similares)"}
+        <p className="text-sm text-emerald-700 font-medium mt-4">
+          Comparado con {n_comps}{" "}
+          {strategy === "similares"
+            ? "propiedades de área y dormitorios similares"
+            : "propiedades del distrito (había pocas del mismo tamaño)"}
+          .
         </p>
       </div>
     </div>
