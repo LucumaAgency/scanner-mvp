@@ -29,6 +29,12 @@ function fmt2(n) {
   return Number(n).toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
+// Formatea solo para mostrar (1000 → "1,000"). El estado guarda dígitos crudos.
+function formatThousands(raw) {
+  const digits = String(raw ?? "").replace(/\D/g, "");
+  return digits === "" ? "" : Number(digits).toLocaleString("en-US");
+}
+
 export default function App() {
   const [districts, setDistricts] = useState([]);
   const [loadingDistricts, setLoadingDistricts] = useState(true);
@@ -114,7 +120,7 @@ export default function App() {
   const showBedrooms = propertyTypeMeta?.hasBedrooms ?? false;
   const isAlquiler = form.operation === "alquiler";
   const priceLabel = isAlquiler ? "Renta mensual (USD)" : "Precio (USD)";
-  const pricePlaceholder = isAlquiler ? "1500" : "220000";
+  const pricePlaceholder = isAlquiler ? "1,500" : "220,000";
 
   const visibleDistricts = districts.filter((d) => {
     const count = isAlquiler ? d.stats?.alquiler_count : d.stats?.venta_count;
@@ -258,10 +264,15 @@ export default function App() {
             hint="Déjalo vacío para ver solo el precio por m² de la zona."
           >
             <input
-              type="number"
-              min="100"
-              value={form.priceUsd}
-              onChange={update("priceUsd")}
+              type="text"
+              inputMode="numeric"
+              value={formatThousands(form.priceUsd)}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  priceUsd: e.target.value.replace(/\D/g, ""),
+                }))
+              }
               className="input"
               placeholder={pricePlaceholder}
             />
@@ -541,6 +552,15 @@ function InvestmentCalculator({ district, priceUsd, areaM2 }) {
     setResult(null);
   }, [district?.slug, priceUsd, areaM2]);
 
+  // Auto-cálculo: la proyección (detalle + tabla año a año) aparece sola al
+  // valuar y se actualiza al ajustar cualquier supuesto, sin pulsar un botón.
+  // Debounce de 400 ms para no llamar a la API en cada tecla.
+  useEffect(() => {
+    const id = setTimeout(() => onCalculate(), 400);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputs]);
+
   function setField(path, value) {
     setInputs((s) => {
       const copy = { ...s };
@@ -785,14 +805,14 @@ function InvestmentCalculator({ district, priceUsd, areaM2 }) {
         <CagrHelper onUseG={(g) => setField("g", g)} />
       </Section>
 
-      <button
-        type="button"
-        onClick={onCalculate}
-        disabled={submitting}
-        className="w-full bg-slate-900 text-white rounded-lg py-2.5 font-medium hover:bg-slate-800 disabled:opacity-60"
-      >
-        {submitting ? "Calculando..." : "Calcular inversión"}
-      </button>
+      <div className="flex items-center gap-2 text-sm text-slate-500 min-h-[1.25rem]">
+        {submitting && (
+          <>
+            <span className="inline-block h-3 w-3 rounded-full border-2 border-slate-300 border-t-slate-600 animate-spin" />
+            Actualizando proyección…
+          </>
+        )}
+      </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
