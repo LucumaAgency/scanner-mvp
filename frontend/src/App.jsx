@@ -35,6 +35,60 @@ function formatThousands(raw) {
   return digits === "" ? "" : Number(digits).toLocaleString("en-US");
 }
 
+// Glosario de términos técnicos → explicación en lenguaje simple.
+const GLOSARIO = {
+  cap_rate:
+    "CAP rate (bruto): renta anual del alquiler ÷ precio. Cuánto rinde al año antes de gastos. En Lima, >5% se considera bueno.",
+  net_cap_rate:
+    "NET CAP rate: igual que el CAP rate pero ya descontados los gastos y la vacancia. >4% se considera bueno.",
+  per: "PER bruto: años de alquiler (sin descontar gastos) que tardarías en recuperar lo que pagaste. Menos es mejor (<18).",
+  per_neto:
+    "PER neto: años de alquiler ya descontando gastos para recuperar la inversión. Menos es mejor (<15).",
+  moic: "MOIC: cuántas veces multiplicas tu dinero al final (total obtenido ÷ precio de compra). 1.5x = recuperas tu plata y media.",
+  plusvalia:
+    "Plusvalía: cuánto sube de valor el inmueble con el tiempo, sin contar los alquileres.",
+  plusvalia_acum:
+    "Plusvalía acumulada: cuánto subió de valor el inmueble en todo el período.",
+  rentas_acum:
+    "Rentas acumuladas: total de alquileres netos que cobrarías en todo el período.",
+  vacancia: "Vacancia: porcentaje del año en que el inmueble queda sin alquilar (0.10 = 10%, ≈1.2 meses).",
+  inflacion_acum:
+    "Inflación acumulada: cuánto perdió valor el dinero en el período (datos BCRP). Tu inversión debe superarla para ganar de verdad.",
+  rentabilidad_total:
+    "Rentabilidad total: plusvalía + rentas acumuladas, como % del precio de compra.",
+  ganancia_real:
+    "Ganancia real: lo que ganas por encima de la inflación. Si es positiva, ganas poder adquisitivo de verdad.",
+  min_inflacion:
+    "Mínimo anti-inflación: cuánto tendría que valer tu inversión solo para empatar con la inflación. Por debajo de eso, pierdes en términos reales.",
+  usd_m2:
+    "USD/m²: precio por metro cuadrado en dólares. Sirve para comparar propiedades de distinto tamaño de forma justa.",
+  cagr: "CAGR: tasa de crecimiento anual compuesta — el % promedio que subió de precio por año en el período.",
+};
+
+// Ícono "i" que muestra una explicación al tocarlo (funciona en móvil y desktop).
+function InfoTip({ text }) {
+  const [open, setOpen] = useState(false);
+  if (!text) return null;
+  return (
+    <span className="relative inline-block align-middle">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        onBlur={() => setOpen(false)}
+        aria-label="Más información"
+        className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-slate-300 text-[10px] font-bold leading-none text-slate-700 hover:bg-slate-400"
+      >
+        i
+      </button>
+      {open && (
+        <span className="absolute bottom-full left-1/2 z-[1000] mb-1 w-56 -translate-x-1/2 rounded-md bg-slate-800 px-3 py-2 text-left text-xs font-normal leading-snug text-white shadow-lg">
+          {text}
+        </span>
+      )}
+    </span>
+  );
+}
+
 export default function App() {
   const [districts, setDistricts] = useState([]);
   const [loadingDistricts, setLoadingDistricts] = useState(true);
@@ -332,10 +386,13 @@ export default function App() {
   );
 }
 
-function Field({ label, children, hint }) {
+function Field({ label, children, hint, info }) {
   return (
     <label className="block">
-      <span className="block text-sm font-medium text-slate-700 mb-1">{label}</span>
+      <span className="block text-sm font-medium text-slate-700 mb-1">
+        {label}
+        {info && <InfoTip text={info} />}
+      </span>
       {children}
       {hint && <span className="block text-xs text-slate-500 mt-1">{hint}</span>}
     </label>
@@ -661,8 +718,8 @@ function InvestmentCalculator({ district, priceUsd, areaM2 }) {
           hint="🔒 Calculado desde el precio que valuaste (× TC referencial). Para cambiarlo, edita el precio en el valuador."
         >
           <input
-            type="number"
-            value={inputs.precioSoles}
+            type="text"
+            value={formatThousands(inputs.precioSoles)}
             disabled
             readOnly
             className="input-sm bg-slate-100 text-slate-500 cursor-not-allowed"
@@ -677,10 +734,12 @@ function InvestmentCalculator({ district, priceUsd, areaM2 }) {
           hint="Diferencia entre el precio a la entrega y el precio que pagas (preventa / socio fundador). 0 si compras al precio público."
         >
           <input
-            type="number"
-            min="0"
-            value={inputs.plusvaliaInmediataSoles}
-            onChange={(e) => setField("plusvaliaInmediataSoles", e.target.value)}
+            type="text"
+            inputMode="numeric"
+            value={formatThousands(inputs.plusvaliaInmediataSoles)}
+            onChange={(e) =>
+              setField("plusvaliaInmediataSoles", e.target.value.replace(/\D/g, ""))
+            }
             className="input-sm"
           />
         </Field>
@@ -749,12 +808,13 @@ function InvestmentCalculator({ district, priceUsd, areaM2 }) {
           onChange={(esc, val) => setField(`vacancia.${esc}`, val)}
           step="0.01"
           hint="0.10 = 10% (≈1.2 meses sin alquilar al año)"
+          info={GLOSARIO.vacancia}
         />
         <ScenarioRow
           label="Gastos operativos anuales (S/.)"
           values={inputs.gastosOperativosSoles}
           onChange={(esc, val) => setField(`gastosOperativosSoles.${esc}`, val)}
-          step="50"
+          money
           hint="Mantenimiento + impuestos + administración"
         />
       </Section>
@@ -833,21 +893,34 @@ function Section({ title, hint, children }) {
   );
 }
 
-function ScenarioRow({ label, values, onChange, step, hint }) {
+function ScenarioRow({ label, values, onChange, step, hint, info, money }) {
   return (
     <div>
-      <p className="text-xs font-medium text-slate-700 mb-1">{label}</p>
+      <p className="text-xs font-medium text-slate-700 mb-1">
+        {label}
+        {info && <InfoTip text={info} />}
+      </p>
       <div className="grid grid-cols-3 gap-2">
         {["pesimista", "promedio", "optimista"].map((esc) => (
           <div key={esc}>
             <p className="text-[10px] uppercase text-slate-500 mb-0.5">{esc}</p>
-            <input
-              type="number"
-              step={step}
-              value={values[esc]}
-              onChange={(e) => onChange(esc, e.target.value)}
-              className="input-sm"
-            />
+            {money ? (
+              <input
+                type="text"
+                inputMode="numeric"
+                value={formatThousands(values[esc])}
+                onChange={(e) => onChange(esc, e.target.value.replace(/\D/g, ""))}
+                className="input-sm"
+              />
+            ) : (
+              <input
+                type="number"
+                step={step}
+                value={values[esc]}
+                onChange={(e) => onChange(esc, e.target.value)}
+                className="input-sm"
+              />
+            )}
           </div>
         ))}
       </div>
@@ -893,11 +966,17 @@ function InvestmentResult({ result }) {
         <p className="text-sm mt-1 opacity-80">{verdictMeta.hint}</p>
         <div className="grid grid-cols-2 gap-3 mt-4 text-sm">
           <div>
-            <p className="opacity-70 text-xs">Rentabilidad total proyectada</p>
+            <p className="opacity-70 text-xs">
+              Rentabilidad total proyectada
+              <InfoTip text={GLOSARIO.rentabilidad_total} />
+            </p>
             <p className="font-semibold">{proyeccion.rentabilidad_total_pct}%</p>
           </div>
           <div>
-            <p className="opacity-70 text-xs">Inflación acumulada</p>
+            <p className="opacity-70 text-xs">
+              Inflación acumulada
+              <InfoTip text={GLOSARIO.inflacion_acum} />
+            </p>
             <p className="font-semibold">{proyeccion.inflacion_acum_pct}%</p>
           </div>
         </div>
@@ -916,10 +995,10 @@ function InvestmentResult({ result }) {
             </tr>
           </thead>
           <tbody className="text-slate-800">
-            <RatioRow label="CAP rate (bruto)" values={["cap_rate", "%"]} ratios={ratios} bench="cap_rate" />
-            <RatioRow label="NET CAP rate" values={["net_cap_rate", "%"]} ratios={ratios} bench="net_cap_rate" />
-            <RatioRow label="PER bruto (años)" values={["per", ""]} ratios={ratios} bench="per" />
-            <RatioRow label="PER neto (años)" values={["per_neto", ""]} ratios={ratios} bench="per_neto" />
+            <RatioRow label="CAP rate (bruto)" values={["cap_rate", "%"]} ratios={ratios} bench="cap_rate" info={GLOSARIO.cap_rate} />
+            <RatioRow label="NET CAP rate" values={["net_cap_rate", "%"]} ratios={ratios} bench="net_cap_rate" info={GLOSARIO.net_cap_rate} />
+            <RatioRow label="PER bruto (años)" values={["per", ""]} ratios={ratios} bench="per" info={GLOSARIO.per} />
+            <RatioRow label="PER neto (años)" values={["per_neto", ""]} ratios={ratios} bench="per_neto" info={GLOSARIO.per_neto} />
             <RatioRow label="Renta neta anual (USD)" values={["ing_neto_anual_usd", "$"]} ratios={ratios} />
           </tbody>
         </table>
@@ -936,6 +1015,7 @@ function InvestmentResult({ result }) {
       <div className="bg-white rounded-xl border border-slate-200 p-5">
         <p className="text-sm font-semibold text-slate-800 mb-3">
           Proyección a {result.input.n} años · MOIC {proyeccion.moic}x
+          <InfoTip text={GLOSARIO.moic} />
         </p>
         <p className="text-xs text-slate-500 mb-3">
           {tiempos.años_sin_renta} años en preventa · {tiempos.años_con_renta} años con renta
@@ -950,11 +1030,11 @@ function InvestmentResult({ result }) {
           )}
           <ProyRow label="Valor a la entrega" value={`$${fmt(proyeccion.valor_entrega_usd)}`} />
           <ProyRow label={`Valor final (${result.input.n}a)`} value={`$${fmt(proyeccion.valor_final_usd)}`} />
-          <ProyRow label="Plusvalía acumulada" value={`+$${fmt(proyeccion.plusvalia_usd)} (${proyeccion.plusvalia_acum_pct}%)`} />
-          <ProyRow label="Rentas acumuladas" value={`$${fmt(proyeccion.renta_acum_usd)} (${proyeccion.renta_acum_pct}%)`} />
+          <ProyRow label="Plusvalía acumulada" value={`+$${fmt(proyeccion.plusvalia_usd)} (${proyeccion.plusvalia_acum_pct}%)`} info={GLOSARIO.plusvalia_acum} />
+          <ProyRow label="Rentas acumuladas" value={`$${fmt(proyeccion.renta_acum_usd)} (${proyeccion.renta_acum_pct}%)`} info={GLOSARIO.rentas_acum} />
           <ProyRow label="Total obtenido" value={`$${fmt(proyeccion.valor_total_obtenido_usd)}`} bold />
-          <ProyRow label="Mínimo anti-inflación" value={`$${fmt(proyeccion.inversion_ajustada_usd)}`} muted />
-          <ProyRow label="Ganancia real (vs inflación)" value={`$${fmt(proyeccion.ganancia_real_usd)}`} bold positive={proyeccion.ganancia_real_usd >= 0} />
+          <ProyRow label="Mínimo anti-inflación" value={`$${fmt(proyeccion.inversion_ajustada_usd)}`} muted info={GLOSARIO.min_inflacion} />
+          <ProyRow label="Ganancia real (vs inflación)" value={`$${fmt(proyeccion.ganancia_real_usd)}`} bold positive={proyeccion.ganancia_real_usd >= 0} info={GLOSARIO.ganancia_real} />
         </div>
         {result.soles && (
           <div className="mt-4 pt-3 border-t border-slate-100">
@@ -1019,7 +1099,7 @@ function InvestmentResult({ result }) {
   );
 }
 
-function RatioRow({ label, values, ratios, bench }) {
+function RatioRow({ label, values, ratios, bench, info }) {
   const [field, suffix] = values;
   const renderVal = (v) => {
     if (v == null) return "—";
@@ -1030,7 +1110,10 @@ function RatioRow({ label, values, ratios, bench }) {
   const ok = bench ? ratios.promedio.cumple?.[bench] : null;
   return (
     <tr className="border-t border-slate-100">
-      <td className="py-2 text-slate-700">{label}</td>
+      <td className="py-2 text-slate-700">
+        {label}
+        {info && <InfoTip text={info} />}
+      </td>
       <td className="py-2 text-right">{renderVal(ratios.pesimista[field])}</td>
       <td className="py-2 text-right font-medium">
         {renderVal(ratios.promedio[field])}
@@ -1260,7 +1343,7 @@ function CagrHelper({ onUseG }) {
   );
 }
 
-function ProyRow({ label, value, bold, muted, positive }) {
+function ProyRow({ label, value, bold, muted, positive, info }) {
   let valueClass = "text-slate-900";
   if (bold) valueClass = "text-slate-900 font-semibold";
   if (muted) valueClass = "text-slate-500";
@@ -1269,7 +1352,10 @@ function ProyRow({ label, value, bold, muted, positive }) {
 
   return (
     <div className="flex justify-between items-baseline">
-      <span className="text-slate-600">{label}</span>
+      <span className="text-slate-600">
+        {label}
+        {info && <InfoTip text={info} />}
+      </span>
       <span className={valueClass}>{value}</span>
     </div>
   );

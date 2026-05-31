@@ -38,12 +38,13 @@ function priceColor(t) {
   return "rgb(239,68,68)";
 }
 
-// Ajusta el encuadre del mapa a las burbujas visibles cada vez que cambian.
+// Ajusta el encuadre del mapa a las burbujas del NÚCLEO (donde está el grueso
+// del inventario) cada vez que cambian. maxZoom controla qué tan cerca llega.
 function FitToMarkers({ bounds }) {
   const map = useMap();
   useEffect(() => {
     if (bounds && bounds.length) {
-      map.fitBounds(bounds, { padding: [30, 30], maxZoom: 13 });
+      map.fitBounds(bounds, { padding: [25, 25], maxZoom: 14 });
     }
   }, [map, bounds]);
   return null;
@@ -95,10 +96,23 @@ export default function DistrictMap({
     };
   }, [points]);
 
-  const bounds = useMemo(
-    () => points.map((p) => [p.lat, p.lng]),
-    [points]
-  );
+  // Encuadre inicial: solo los distritos que suman ~90% del inventario (los más
+  // densos). Así el mapa abre zoomeado en Lima en vez de alejarse para mostrar
+  // provincias con 1 aviso. Las demás burbujas igual se dibujan; el user puede
+  // alejar/pan para verlas.
+  const bounds = useMemo(() => {
+    if (!points.length) return [];
+    const total = points.reduce((s, p) => s + p.count, 0);
+    const sorted = [...points].sort((a, b) => b.count - a.count);
+    const core = [];
+    let acc = 0;
+    for (const p of sorted) {
+      core.push([p.lat, p.lng]);
+      acc += p.count;
+      if (acc >= total * 0.9) break;
+    }
+    return core;
+  }, [points]);
 
   const fmt = (n) =>
     n == null ? "-" : Number(n).toLocaleString("en-US", { maximumFractionDigits: isAlquiler ? 1 : 0 });
