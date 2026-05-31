@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import DistrictMap from "./lib/DistrictMap.jsx";
 
 const PROPERTY_TYPES = [
   { value: "departamento", label: "Departamento", hasBedrooms: true },
@@ -156,31 +157,62 @@ export default function App() {
           </Field>
 
           <Field label="Distrito">
-            <select
-              required
-              value={form.district}
-              onChange={update("district")}
-              className="input"
-              disabled={loadingDistricts}
-            >
-              <option value="">
-                {loadingDistricts
-                  ? "Cargando..."
-                  : visibleDistricts.length
-                  ? "Elige un distrito"
-                  : `Sin distritos con inventario de ${isAlquiler ? "alquiler" : "venta"}`}
-              </option>
-              {visibleDistricts.map((d) => {
-                const count = isAlquiler
-                  ? d.stats?.alquiler_count
-                  : d.stats?.venta_count;
-                return (
-                  <option key={d.slug} value={d.slug}>
-                    {d.name} · {count} {count === 1 ? "propiedad" : "propiedades"}
-                  </option>
-                );
-              })}
-            </select>
+            {loadingDistricts ? (
+              <div className="text-sm text-slate-500 py-2">Cargando mapa…</div>
+            ) : visibleDistricts.length ? (
+              <>
+                <DistrictMap
+                  districts={visibleDistricts}
+                  operation={form.operation}
+                  selectedSlug={form.district}
+                  onSelect={(slug) =>
+                    setForm((f) => ({ ...f, district: slug }))
+                  }
+                />
+                <p className="mt-2 text-sm">
+                  {selectedDistrict ? (
+                    <span className="text-slate-700">
+                      Seleccionado:{" "}
+                      <span className="font-medium text-slate-900">
+                        {selectedDistrict.name}
+                      </span>
+                      {selectedDistrict.department
+                        ? ` · ${selectedDistrict.department}`
+                        : ""}
+                    </span>
+                  ) : (
+                    <span className="text-slate-500">
+                      Toca una zona del mapa para elegir el distrito.
+                    </span>
+                  )}
+                </p>
+                {/* Alternativa por lista — útil para zonas con burbujas muy juntas (Lima). */}
+                <select
+                  required
+                  value={form.district}
+                  onChange={update("district")}
+                  className="input mt-2"
+                >
+                  <option value="">o elige de la lista…</option>
+                  {visibleDistricts.map((d) => {
+                    const count = isAlquiler
+                      ? d.stats?.alquiler_count
+                      : d.stats?.venta_count;
+                    return (
+                      <option key={d.slug} value={d.slug}>
+                        {d.name} · {count}{" "}
+                        {count === 1 ? "propiedad" : "propiedades"}
+                      </option>
+                    );
+                  })}
+                </select>
+              </>
+            ) : (
+              <div className="text-sm text-slate-500 py-2">
+                Sin distritos con inventario de{" "}
+                {isAlquiler ? "alquiler" : "venta"}.
+              </div>
+            )}
           </Field>
 
           <Field label="Tipo de propiedad">

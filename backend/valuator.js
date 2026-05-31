@@ -157,6 +157,9 @@ export async function listDistricts() {
       slug: 1,
       name: 1,
       province: 1,
+      department: 1,
+      // Centroide [lng, lat] del distrito — lo usa el mapa de burbujas del frontend.
+      centroid: 1,
       "stats.active_listings": 1,
       "stats.venta_count": 1,
       "stats.alquiler_count": 1,

@@ -8,9 +8,16 @@ on:
 permissions:
   contents: write
 
+# Serializa las corridas: nunca dos builds pisándose el push del dist.
+concurrency:
+  group: build-frontend
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    # No re-dispararse con el propio commit bot de rebuild del dist.
+    if: github.actor != 'github-actions[bot]'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -33,7 +40,18 @@ jobs:
           git add frontend/dist
           if git diff --staged --quiet; then
             echo "No hay cambios en frontend/dist — skip commit"
-          else
-            git commit -m "chore: rebuild frontend/dist"
-            git push
+            exit 0
           fi
+          git commit -m "chore: rebuild frontend/dist"
+          # Reintenta con rebase si el ref se movió mientras buildeábamos.
+          for i in 1 2 3 4 5; do
+            if git push; then
+              echo "push OK"
+              exit 0
+            fi
+            echo "push rechazado (intento $i) — rebase y reintento"
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort; exit 1; }
+          done
+          echo "no se pudo pushear el dist tras varios reintentos"
+          exit 1
